@@ -15,7 +15,12 @@ class CompanyScore(BaseModel):
     company: CompanyNormalized
     icp_score: int = Field(ge=0, le=100)
     fit_level: str
+
+    data_confidence: int = Field(ge=0, le=100)
+    confidence_level: str
+
     reasons: list[str]
+    confidence_reasons: list[str]
 
 
 class ScoreCompanyRequest(BaseModel):
