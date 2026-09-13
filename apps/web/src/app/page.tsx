@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import AnalysisHistoryPanel from "@/components/AnalysisHistoryPanel";
 import CompanyDetailPanel from "@/components/CompanyDetailPanel";
 import CsvUploadPanel from "@/components/CsvUploadPanel";
+import PriorityFilters, {
+  PriorityFilter,
+} from "@/components/PriorityFilters";
 
 import {
   AnalysisRunDetail,
@@ -45,6 +48,9 @@ export default function Home() {
   const [selectedResult, setSelectedResult] =
     useState<StoredAnalysisResult | null>(null);
 
+  const [activeFilter, setActiveFilter] =
+    useState<PriorityFilter>("all");
+
   const [loading, setLoading] = useState(true);
 
   const [runningDemo, setRunningDemo] =
@@ -65,7 +71,9 @@ export default function Home() {
 
   async function refreshHistory() {
     const historyData = await getAnalysisRuns();
+
     setHistory(historyData.runs);
+
     return historyData.runs;
   }
 
@@ -78,7 +86,10 @@ export default function Home() {
       return;
     }
 
-    const detail = await getAnalysisRun(runs[0].id);
+    const detail = await getAnalysisRun(
+      runs[0].id
+    );
+
     setAnalysis(detail);
   }
 
@@ -104,6 +115,7 @@ export default function Home() {
     setRunningDemo(true);
     setError(null);
     setSelectedResult(null);
+    setActiveFilter("all");
 
     try {
       const result = await runDemoAnalysis();
@@ -113,6 +125,7 @@ export default function Home() {
       );
 
       setAnalysis(detail);
+
       await refreshHistory();
     } catch {
       setError(
@@ -124,15 +137,20 @@ export default function Home() {
   }
 
 
-  async function handleHistorySelect(runId: string) {
+  async function handleHistorySelect(
+    runId: string
+  ) {
     setLoadingRunId(runId);
     setError(null);
 
     try {
-      const detail = await getAnalysisRun(runId);
+      const detail = await getAnalysisRun(
+        runId
+      );
 
       setAnalysis(detail);
       setSelectedResult(null);
+      setActiveFilter("all");
       setShowHistory(false);
     } catch {
       setError(
@@ -146,14 +164,79 @@ export default function Home() {
 
   const results = analysis?.results ?? [];
 
-  const highPriority = results.filter(
-    (item) => item.priority_level === "high"
-  ).length;
 
-  const workNow = results.filter(
-    (item) =>
-      item.recommended_action === "work_now"
-  ).length;
+  const filterCounts: Record<
+    PriorityFilter,
+    number
+  > = {
+    all: results.length,
+
+    high_priority: results.filter(
+      (item) =>
+        item.priority_level === "high"
+    ).length,
+
+    work_now: results.filter(
+      (item) =>
+        item.recommended_action === "work_now"
+    ).length,
+
+    open_opportunity: results.filter(
+      (item) =>
+        item.crm_status === "open_opportunity"
+    ).length,
+
+    existing_customer: results.filter(
+      (item) =>
+        item.crm_status === "existing_customer"
+    ).length,
+  };
+
+
+  const filteredResults = results.filter(
+    (item) => {
+      if (activeFilter === "all") {
+        return true;
+      }
+
+      if (activeFilter === "high_priority") {
+        return item.priority_level === "high";
+      }
+
+      if (activeFilter === "work_now") {
+        return (
+          item.recommended_action === "work_now"
+        );
+      }
+
+      if (
+        activeFilter === "open_opportunity"
+      ) {
+        return (
+          item.crm_status ===
+          "open_opportunity"
+        );
+      }
+
+      if (
+        activeFilter === "existing_customer"
+      ) {
+        return (
+          item.crm_status ===
+          "existing_customer"
+        );
+      }
+
+      return true;
+    }
+  );
+
+
+  const highPriority =
+    filterCounts.high_priority;
+
+  const workNow =
+    filterCounts.work_now;
 
 
   return (
@@ -173,14 +256,18 @@ export default function Home() {
 
           <div className="flex gap-3">
             <button
-              onClick={() => setShowHistory(true)}
+              onClick={() =>
+                setShowHistory(true)
+              }
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               History
             </button>
 
             <button
-              onClick={() => setShowUpload(true)}
+              onClick={() =>
+                setShowUpload(true)
+              }
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Upload CSV
@@ -240,7 +327,10 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                {formatDate(analysis.created_at)} · Click an account to inspect its recommendation.
+                {formatDate(
+                  analysis.created_at
+                )}{" "}
+                · Click an account to inspect its recommendation.
               </p>
             </div>
 
@@ -265,13 +355,36 @@ export default function Home() {
 
             <section className="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-6 py-5">
-                <h3 className="font-semibold text-slate-950">
-                  Priority Queue
-                </h3>
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <h3 className="font-semibold text-slate-950">
+                      Priority Queue
+                    </h3>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Accounts ranked by fit, signals, and GTM context.
-                </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Accounts ranked by fit, signals, and GTM context.
+                    </p>
+                  </div>
+
+                  <PriorityFilters
+                    value={activeFilter}
+                    onChange={setActiveFilter}
+                    counts={filterCounts}
+                  />
+                </div>
+              </div>
+
+
+              <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-3 text-xs text-slate-500">
+                Showing{" "}
+                <span className="font-semibold text-slate-700">
+                  {filteredResults.length}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-slate-700">
+                  {results.length}
+                </span>{" "}
+                accounts
               </div>
 
 
@@ -311,62 +424,93 @@ export default function Home() {
 
 
                   <tbody className="divide-y divide-slate-100">
-                    {results.map((result) => (
-                      <tr
-                        key={`${result.rank}-${result.company.name}`}
-                        onClick={() =>
-                          setSelectedResult(result)
-                        }
-                        className="cursor-pointer transition hover:bg-slate-50"
-                      >
-                        <td className="px-6 py-5 font-medium text-slate-500">
-                          #{result.rank}
-                        </td>
+                    {filteredResults.map(
+                      (result) => (
+                        <tr
+                          key={`${result.rank}-${result.company.name}`}
+                          onClick={() =>
+                            setSelectedResult(
+                              result
+                            )
+                          }
+                          className="cursor-pointer transition hover:bg-slate-50"
+                        >
+                          <td className="px-6 py-5 font-medium text-slate-500">
+                            #{result.rank}
+                          </td>
 
-                        <td className="px-6 py-5">
-                          <div className="font-semibold text-slate-900">
-                            {result.company.name}
-                          </div>
+                          <td className="px-6 py-5">
+                            <div className="font-semibold text-slate-900">
+                              {
+                                result.company
+                                  .name
+                              }
+                            </div>
 
-                          <div className="mt-1 text-xs text-slate-500">
-                            {result.company.domain ??
-                              "No domain"}
-                          </div>
-                        </td>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {result.company
+                                .domain ??
+                                "No domain"}
+                            </div>
+                          </td>
 
-                        <td className="px-6 py-5">
-                          <ScoreBadge
-                            score={
-                              result.priority_score
+                          <td className="px-6 py-5">
+                            <ScoreBadge
+                              score={
+                                result.priority_score
+                              }
+                            />
+                          </td>
+
+                          <td className="px-6 py-5 text-slate-700">
+                            {
+                              result.icp_score
                             }
-                          />
-                        </td>
+                          </td>
 
-                        <td className="px-6 py-5 text-slate-700">
-                          {result.icp_score}
-                        </td>
+                          <td className="px-6 py-5 text-slate-700">
+                            {
+                              result.signal_score
+                            }
+                          </td>
 
-                        <td className="px-6 py-5 text-slate-700">
-                          {result.signal_score}
-                        </td>
+                          <td className="px-6 py-5">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              {formatAction(
+                                result.crm_status
+                              )}
+                            </span>
+                          </td>
 
-                        <td className="px-6 py-5">
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                          <td className="px-6 py-5 font-medium text-slate-900">
                             {formatAction(
-                              result.crm_status
+                              result.recommended_action
                             )}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-5 font-medium text-slate-900">
-                          {formatAction(
-                            result.recommended_action
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
+
+
+                {filteredResults.length ===
+                  0 && (
+                  <div className="px-6 py-12 text-center">
+                    <p className="font-medium text-slate-700">
+                      No accounts match this filter.
+                    </p>
+
+                    <button
+                      onClick={() =>
+                        setActiveFilter("all")
+                      }
+                      className="mt-3 text-sm font-medium text-slate-500 underline"
+                    >
+                      Show all accounts
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
           </>
@@ -376,11 +520,17 @@ export default function Home() {
 
       {showUpload && (
         <CsvUploadPanel
-          onClose={() => setShowUpload(false)}
-          onAnalysisComplete={async (newAnalysis) => {
+          onClose={() =>
+            setShowUpload(false)
+          }
+          onAnalysisComplete={async (
+            newAnalysis
+          ) => {
             setAnalysis(newAnalysis);
             setSelectedResult(null);
+            setActiveFilter("all");
             setError(null);
+
             await refreshHistory();
           }}
         />
@@ -390,10 +540,14 @@ export default function Home() {
       {showHistory && (
         <AnalysisHistoryPanel
           runs={history}
-          activeRunId={analysis?.id ?? null}
+          activeRunId={
+            analysis?.id ?? null
+          }
           loadingRunId={loadingRunId}
           onSelect={handleHistorySelect}
-          onClose={() => setShowHistory(false)}
+          onClose={() =>
+            setShowHistory(false)
+          }
         />
       )}
 
