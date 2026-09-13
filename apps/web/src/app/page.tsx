@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import CsvUploadPanel from "@/components/CsvUploadPanel";
+
 import {
   AnalysisRunDetail,
   getAnalysisRun,
@@ -27,6 +29,9 @@ export default function Home() {
 
   const [loading, setLoading] = useState(true);
   const [runningDemo, setRunningDemo] =
+    useState(false);
+
+  const [showUpload, setShowUpload] =
     useState(false);
 
   const [error, setError] =
@@ -116,7 +121,10 @@ export default function Home() {
           </div>
 
           <div className="flex gap-3">
-            <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+            <button
+              onClick={() => setShowUpload(true)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
               Upload CSV
             </button>
 
@@ -209,21 +217,27 @@ export default function Home() {
                       <th className="px-6 py-4">
                         Rank
                       </th>
+
                       <th className="px-6 py-4">
                         Company
                       </th>
+
                       <th className="px-6 py-4">
                         Priority
                       </th>
+
                       <th className="px-6 py-4">
                         ICP
                       </th>
+
                       <th className="px-6 py-4">
                         Signals
                       </th>
+
                       <th className="px-6 py-4">
                         CRM
                       </th>
+
                       <th className="px-6 py-4">
                         Action
                       </th>
@@ -286,6 +300,17 @@ export default function Home() {
           </>
         )}
       </div>
+
+
+      {showUpload && (
+        <CsvUploadPanel
+          onClose={() => setShowUpload(false)}
+          onAnalysisComplete={(newAnalysis) => {
+            setAnalysis(newAnalysis);
+            setError(null);
+          }}
+        />
+      )}
     </main>
   );
 }
