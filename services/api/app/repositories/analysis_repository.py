@@ -1,4 +1,6 @@
-from sqlalchemy import select
+from uuid import UUID
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from services.api.app.models.entities import (
@@ -52,10 +54,7 @@ class AnalysisRepository:
             )
 
         if company:
-            self._update_company(
-                company,
-                result,
-            )
+            self._update_company(company, result)
             return company
 
         company = Company(
@@ -81,9 +80,7 @@ class AnalysisRepository:
     ) -> AnalysisRun:
         analysis_run = AnalysisRun(
             workspace_id=workspace.id,
-            icp_config=icp.model_dump(
-                mode="json"
-            ),
+            icp_config=icp.model_dump(mode="json"),
         )
 
         self.db.add(analysis_run)
@@ -108,9 +105,7 @@ class AnalysisRepository:
             crm_status=result.crm_status,
             recommended_action=result.recommended_action,
             action_reason=result.action_reason,
-            enrichment=result.enrichment.model_dump(
-                mode="json"
-            ),
+            enrichment=result.enrichment.model_dump(mode="json"),
             details={
                 "fit_level": result.fit_level,
                 "signal_level": result.signal_level,
@@ -163,6 +158,84 @@ class AnalysisRepository:
         except Exception:
             self.db.rollback()
             raise
+
+    def list_analysis_runs(
+        self,
+        limit: int = 20,
+    ):
+        statement = (
+            select(
+                AnalysisRun,
+                Workspace.name,
+                func.count(AnalysisResult.id),
+            )
+            .join(
+                Workspace,
+                Workspace.id == AnalysisRun.workspace_id,
+            )
+            .outerjoin(
+                AnalysisResult,
+                AnalysisResult.analysis_run_id == AnalysisRun.id,
+            )
+            .group_by(
+                AnalysisRun.id,
+                Workspace.name,
+            )
+            .order_by(
+                AnalysisRun.created_at.desc()
+            )
+            .limit(limit)
+        )
+
+        return self.db.execute(statement).all()
+
+    def get_analysis_run(
+        self,
+        run_id: UUID,
+    ):
+        run_statement = (
+            select(
+                AnalysisRun,
+                Workspace.name,
+            )
+            .join(
+                Workspace,
+                Workspace.id == AnalysisRun.workspace_id,
+            )
+            .where(
+                AnalysisRun.id == run_id
+            )
+        )
+
+        run_row = self.db.execute(
+            run_statement
+        ).first()
+
+        if not run_row:
+            return None
+
+        results_statement = (
+            select(
+                AnalysisResult,
+                Company,
+            )
+            .join(
+                Company,
+                Company.id == AnalysisResult.company_id,
+            )
+            .where(
+                AnalysisResult.analysis_run_id == run_id
+            )
+            .order_by(
+                AnalysisResult.rank.asc()
+            )
+        )
+
+        result_rows = self.db.execute(
+            results_statement
+        ).all()
+
+        return run_row, result_rows
 
     @staticmethod
     def _update_company(
