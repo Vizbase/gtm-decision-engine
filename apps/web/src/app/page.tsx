@@ -8,6 +8,9 @@ import CsvUploadPanel from "@/components/CsvUploadPanel";
 import PriorityFilters, {
   PriorityFilter,
 } from "@/components/PriorityFilters";
+import QueueControls, {
+  SortOption,
+} from "@/components/QueueControls";
 
 import {
   AnalysisRunDetail,
@@ -51,6 +54,11 @@ export default function Home() {
   const [activeFilter, setActiveFilter] =
     useState<PriorityFilter>("all");
 
+  const [search, setSearch] = useState("");
+
+  const [sort, setSort] =
+    useState<SortOption>("rank");
+
   const [loading, setLoading] = useState(true);
 
   const [runningDemo, setRunningDemo] =
@@ -67,6 +75,13 @@ export default function Home() {
 
   const [error, setError] =
     useState<string | null>(null);
+
+
+  function resetQueueControls() {
+    setActiveFilter("all");
+    setSearch("");
+    setSort("rank");
+  }
 
 
   async function refreshHistory() {
@@ -115,7 +130,7 @@ export default function Home() {
     setRunningDemo(true);
     setError(null);
     setSelectedResult(null);
-    setActiveFilter("all");
+    resetQueueControls();
 
     try {
       const result = await runDemoAnalysis();
@@ -150,7 +165,7 @@ export default function Home() {
 
       setAnalysis(detail);
       setSelectedResult(null);
-      setActiveFilter("all");
+      resetQueueControls();
       setShowHistory(false);
     } catch {
       setError(
@@ -230,6 +245,61 @@ export default function Home() {
       return true;
     }
   );
+
+
+  const searchQuery = search
+    .trim()
+    .toLowerCase();
+
+
+  const searchedResults =
+    filteredResults.filter((item) => {
+      if (!searchQuery) {
+        return true;
+      }
+
+      const companyName =
+        item.company.name.toLowerCase();
+
+      const domain =
+        item.company.domain?.toLowerCase() ?? "";
+
+      return (
+        companyName.includes(searchQuery) ||
+        domain.includes(searchQuery)
+      );
+    });
+
+
+  const visibleResults = [
+    ...searchedResults,
+  ].sort((a, b) => {
+    if (sort === "priority") {
+      return (
+        b.priority_score -
+          a.priority_score ||
+        a.rank - b.rank
+      );
+    }
+
+    if (sort === "icp") {
+      return (
+        b.icp_score -
+          a.icp_score ||
+        a.rank - b.rank
+      );
+    }
+
+    if (sort === "signals") {
+      return (
+        b.signal_score -
+          a.signal_score ||
+        a.rank - b.rank
+      );
+    }
+
+    return a.rank - b.rank;
+  });
 
 
   const highPriority =
@@ -371,6 +441,13 @@ export default function Home() {
                     onChange={setActiveFilter}
                     counts={filterCounts}
                   />
+
+                  <QueueControls
+                    search={search}
+                    onSearchChange={setSearch}
+                    sort={sort}
+                    onSortChange={setSort}
+                  />
                 </div>
               </div>
 
@@ -378,7 +455,7 @@ export default function Home() {
               <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-3 text-xs text-slate-500">
                 Showing{" "}
                 <span className="font-semibold text-slate-700">
-                  {filteredResults.length}
+                  {visibleResults.length}
                 </span>{" "}
                 of{" "}
                 <span className="font-semibold text-slate-700">
@@ -424,7 +501,7 @@ export default function Home() {
 
 
                   <tbody className="divide-y divide-slate-100">
-                    {filteredResults.map(
+                    {visibleResults.map(
                       (result) => (
                         <tr
                           key={`${result.rank}-${result.company.name}`}
@@ -494,20 +571,20 @@ export default function Home() {
                 </table>
 
 
-                {filteredResults.length ===
-                  0 && (
+                {visibleResults.length === 0 && (
                   <div className="px-6 py-12 text-center">
                     <p className="font-medium text-slate-700">
-                      No accounts match this filter.
+                      No accounts match your current search or filter.
                     </p>
 
                     <button
-                      onClick={() =>
-                        setActiveFilter("all")
-                      }
+                      onClick={() => {
+                        setActiveFilter("all");
+                        setSearch("");
+                      }}
                       className="mt-3 text-sm font-medium text-slate-500 underline"
                     >
-                      Show all accounts
+                      Clear filters
                     </button>
                   </div>
                 )}
@@ -528,7 +605,7 @@ export default function Home() {
           ) => {
             setAnalysis(newAnalysis);
             setSelectedResult(null);
-            setActiveFilter("all");
+            resetQueueControls();
             setError(null);
 
             await refreshHistory();
