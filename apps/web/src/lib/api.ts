@@ -51,7 +51,9 @@ export type AnalysisRunDetail = {
 
 
 export async function getAnalysisRuns() {
-  const response = await fetch(`${API_URL}/analysis/runs?limit=20`);
+  const response = await fetch(
+    `${API_URL}/analysis/runs?limit=20`
+  );
 
   if (!response.ok) {
     throw new Error("Could not load analysis runs");
@@ -70,6 +72,68 @@ export async function getAnalysisRun(
 
   if (!response.ok) {
     throw new Error("Could not load analysis run");
+  }
+
+  return response.json();
+}
+
+
+export async function runDemoAnalysis() {
+  const response = await fetch(
+    `${API_URL}/analysis/run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        workspace_name: "Demo Workspace",
+        companies: [
+          {
+            name: "HubSpot",
+            website: "https://www.hubspot.com",
+            country: "United States",
+            industry: "Software",
+            employee_count: 8000,
+            linkedin_url: null,
+          },
+          {
+            name: "Acme GmbH",
+            website: "acme.com",
+            country: "Germany",
+            industry: "Software",
+            employee_count: 120,
+            linkedin_url: null,
+          },
+          {
+            name: "Nova AI",
+            website: "nova.ai",
+            country: "Netherlands",
+            industry: "Artificial Intelligence",
+            employee_count: 75,
+            linkedin_url: null,
+          },
+        ],
+        icp: {
+          target_countries: [
+            "Germany",
+            "Netherlands",
+            "United States",
+          ],
+          target_industries: [
+            "Software",
+            "SaaS",
+          ],
+          min_employees: 50,
+          max_employees: 10000,
+        },
+        use_website_enrichment: true,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Demo analysis failed");
   }
 
   return response.json();

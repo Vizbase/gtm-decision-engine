@@ -6,6 +6,7 @@ import {
   AnalysisRunDetail,
   getAnalysisRun,
   getAnalysisRuns,
+  runDemoAnalysis,
 } from "@/lib/api";
 
 
@@ -25,27 +26,35 @@ export default function Home() {
     useState<AnalysisRunDetail | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [runningDemo, setRunningDemo] =
+    useState(false);
+
   const [error, setError] =
     useState<string | null>(null);
+
+
+  async function loadLatestAnalysis() {
+    const history = await getAnalysisRuns();
+
+    if (!history.runs.length) {
+      setAnalysis(null);
+      return;
+    }
+
+    const latestRun = history.runs[0];
+
+    const detail = await getAnalysisRun(
+      latestRun.id
+    );
+
+    setAnalysis(detail);
+  }
 
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const history = await getAnalysisRuns();
-
-        if (!history.runs.length) {
-          setLoading(false);
-          return;
-        }
-
-        const latestRun = history.runs[0];
-
-        const detail = await getAnalysisRun(
-          latestRun.id
-        );
-
-        setAnalysis(detail);
+        await loadLatestAnalysis();
       } catch {
         setError(
           "Could not connect to the GTM Decision Engine API."
@@ -57,6 +66,28 @@ export default function Home() {
 
     loadDashboard();
   }, []);
+
+
+  async function handleDemo() {
+    setRunningDemo(true);
+    setError(null);
+
+    try {
+      const result = await runDemoAnalysis();
+
+      const detail = await getAnalysisRun(
+        result.analysis_run_id
+      );
+
+      setAnalysis(detail);
+    } catch {
+      setError(
+        "The demo analysis could not be completed."
+      );
+    } finally {
+      setRunningDemo(false);
+    }
+  }
 
 
   const results = analysis?.results ?? [];
@@ -89,8 +120,14 @@ export default function Home() {
               Upload CSV
             </button>
 
-            <button className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white">
-              Try Demo
+            <button
+              onClick={handleDemo}
+              disabled={runningDemo}
+              className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningDemo
+                ? "Running..."
+                : "Try Demo"}
             </button>
           </div>
         </div>
@@ -105,12 +142,12 @@ export default function Home() {
         )}
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
             {error}
           </div>
         )}
 
-        {!loading && !error && !analysis && (
+        {!loading && !analysis && (
           <div className="rounded-xl border border-slate-200 bg-white p-8">
             <h2 className="font-semibold text-slate-900">
               No analysis yet
