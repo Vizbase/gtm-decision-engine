@@ -9,6 +9,7 @@ import {
 
 import {
   Company,
+  CRMContext,
   getAnalysisRun,
   ICPInput,
   runAnalysis,
@@ -18,8 +19,13 @@ import {
 
 type Props = {
   onClose: () => void;
+
   onAnalysisComplete: (
-    analysis: Awaited<ReturnType<typeof getAnalysisRun>>
+    analysis: Awaited<
+      ReturnType<
+        typeof getAnalysisRun
+      >
+    >
   ) => void;
 };
 
@@ -31,13 +37,21 @@ function uniqueValues(
   return Array.from(
     new Set(
       companies
-        .map((company) => company[key]?.trim())
+        .map(
+          (company) =>
+            company[key]?.trim()
+        )
         .filter(
-          (value): value is string =>
+          (
+            value
+          ): value is string =>
             Boolean(value)
         )
     )
-  ).sort((a, b) => a.localeCompare(b));
+  ).sort(
+    (a, b) =>
+      a.localeCompare(b)
+  );
 }
 
 
@@ -46,54 +60,106 @@ export default function CsvUploadPanel({
   onAnalysisComplete,
 }: Props) {
   const fileInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
-  const [companies, setCompanies] =
-    useState<Company[]>([]);
+  const [
+    companies,
+    setCompanies,
+  ] = useState<Company[]>([]);
 
-  const [fileName, setFileName] =
-    useState("");
+  const [
+    crmContexts,
+    setCrmContexts,
+  ] = useState<
+    Record<
+      string,
+      CRMContext
+    >
+  >({});
 
-  const [useIcp, setUseIcp] =
-    useState(false);
+  const [
+    detectedCrmCount,
+    setDetectedCrmCount,
+  ] = useState(0);
 
-  const [selectedCountries, setSelectedCountries] =
-    useState<string[]>([]);
+  const [
+    fileName,
+    setFileName,
+  ] = useState("");
 
-  const [selectedIndustries, setSelectedIndustries] =
-    useState<string[]>([]);
+  const [
+    useIcp,
+    setUseIcp,
+  ] = useState(false);
 
-  const [minEmployees, setMinEmployees] =
-    useState("");
+  const [
+    selectedCountries,
+    setSelectedCountries,
+  ] = useState<string[]>([]);
 
-  const [maxEmployees, setMaxEmployees] =
-    useState("");
+  const [
+    selectedIndustries,
+    setSelectedIndustries,
+  ] = useState<string[]>([]);
 
-  const [loadingFile, setLoadingFile] =
-    useState(false);
+  const [
+    minEmployees,
+    setMinEmployees,
+  ] = useState("");
 
-  const [running, setRunning] =
-    useState(false);
+  const [
+    maxEmployees,
+    setMaxEmployees,
+  ] = useState("");
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    loadingFile,
+    setLoadingFile,
+  ] = useState(false);
+
+  const [
+    running,
+    setRunning,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<
+    string | null
+  >(null);
 
 
-  const countries = useMemo(
-    () => uniqueValues(companies, "country"),
-    [companies]
-  );
+  const countries =
+    useMemo(
+      () =>
+        uniqueValues(
+          companies,
+          "country"
+        ),
+      [companies]
+    );
 
-  const industries = useMemo(
-    () => uniqueValues(companies, "industry"),
-    [companies]
-  );
+
+  const industries =
+    useMemo(
+      () =>
+        uniqueValues(
+          companies,
+          "industry"
+        ),
+      [companies]
+    );
 
 
   async function handleFile(
-    event: ChangeEvent<HTMLInputElement>
+    event:
+      ChangeEvent<HTMLInputElement>
   ) {
-    const file = event.target.files?.[0];
+    const file =
+      event.target.files?.[0];
 
     if (!file) {
       return;
@@ -104,20 +170,45 @@ export default function CsvUploadPanel({
 
     try {
       const result =
-        await uploadCompaniesCsv(file);
+        await uploadCompaniesCsv(
+          file
+        );
 
-      setCompanies(result.companies);
-      setFileName(file.name);
+      setCompanies(
+        result.companies
+      );
+
+      setCrmContexts(
+        result.crm_contexts || {}
+      );
+
+      setDetectedCrmCount(
+        result.detected_crm_count ||
+          0
+      );
+
+      setFileName(
+        file.name
+      );
 
       setUseIcp(false);
-      setSelectedCountries([]);
-      setSelectedIndustries([]);
+
+      setSelectedCountries(
+        []
+      );
+
+      setSelectedIndustries(
+        []
+      );
+
       setMinEmployees("");
       setMaxEmployees("");
+
     } catch {
       setError(
         "Could not import this CSV file."
       );
+
     } finally {
       setLoadingFile(false);
     }
@@ -127,71 +218,114 @@ export default function CsvUploadPanel({
   function toggleValue(
     value: string,
     current: string[],
-    setter: (values: string[]) => void
+    setter: (
+      values: string[]
+    ) => void
   ) {
-    if (current.includes(value)) {
+    if (
+      current.includes(
+        value
+      )
+    ) {
       setter(
         current.filter(
-          (item) => item !== value
+          (item) =>
+            item !== value
         )
       );
+
     } else {
-      setter([...current, value]);
+      setter([
+        ...current,
+        value,
+      ]);
     }
   }
 
 
   async function handleRunAnalysis() {
-    if (!companies.length) {
+    if (
+      !companies.length
+    ) {
       setError(
         "Please upload a CSV first."
       );
+
       return;
     }
 
-    const icp: ICPInput = useIcp
-      ? {
-          target_countries:
-            selectedCountries,
-          target_industries:
-            selectedIndustries,
-          min_employees:
-            minEmployees === ""
-              ? null
-              : Number(minEmployees),
-          max_employees:
-            maxEmployees === ""
-              ? null
-              : Number(maxEmployees),
-        }
-      : {
-          target_countries: [],
-          target_industries: [],
-          min_employees: null,
-          max_employees: null,
-        };
+
+    const icp:
+      ICPInput =
+      useIcp
+        ? {
+            target_countries:
+              selectedCountries,
+
+            target_industries:
+              selectedIndustries,
+
+            min_employees:
+              minEmployees === ""
+                ? null
+                : Number(
+                    minEmployees
+                  ),
+
+            max_employees:
+              maxEmployees === ""
+                ? null
+                : Number(
+                    maxEmployees
+                  ),
+          }
+
+        : {
+            target_countries:
+              [],
+
+            target_industries:
+              [],
+
+            min_employees:
+              null,
+
+            max_employees:
+              null,
+          };
+
 
     setRunning(true);
     setError(null);
 
+
     try {
-      const result = await runAnalysis(
-        companies,
-        icp,
-        "CSV Workspace"
-      );
+      const result =
+        await runAnalysis(
+          companies,
+          icp,
+          "CSV Workspace",
+          crmContexts
+        );
+
 
       const detail =
         await getAnalysisRun(
           result.analysis_run_id
         );
 
-      onAnalysisComplete(detail);
+
+      onAnalysisComplete(
+        detail
+      );
+
       onClose();
+
     } catch {
       setError(
         "The analysis could not be completed."
       );
+
     } finally {
       setRunning(false);
     }
@@ -201,6 +335,7 @@ export default function CsvUploadPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
       <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
           <div>
             <h2 className="text-xl font-semibold text-slate-950">
@@ -208,7 +343,7 @@ export default function CsvUploadPanel({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Every company in the CSV is imported and analyzed.
+              Import account data and CRM context from one CSV.
             </p>
           </div>
 
@@ -222,6 +357,7 @@ export default function CsvUploadPanel({
 
 
         <div className="space-y-7 p-6">
+
           <section>
             <h3 className="text-sm font-semibold text-slate-900">
               1. Upload accounts
@@ -237,7 +373,9 @@ export default function CsvUploadPanel({
                 ref={fileInputRef}
                 type="file"
                 accept=".csv,text/csv"
-                onChange={handleFile}
+                onChange={
+                  handleFile
+                }
                 className="hidden"
               />
 
@@ -249,67 +387,157 @@ export default function CsvUploadPanel({
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
-                The complete file is kept. ICP never removes accounts.
+                Company, CRM, owner, lifecycle and activity fields can be detected automatically.
               </p>
             </div>
           </section>
 
 
-          {companies.length > 0 && (
+          {companies.length >
+            0 && (
             <section>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+
                 <h3 className="text-sm font-semibold text-slate-900">
                   Imported accounts
                 </h3>
 
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-                  {companies.length} imported
-                </span>
+
+                <div className="flex flex-wrap gap-2">
+
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                    {
+                      companies.length
+                    }{" "}
+                    accounts
+                  </span>
+
+
+                  {detectedCrmCount >
+                    0 && (
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+                      {
+                        detectedCrmCount
+                      }{" "}
+                      CRM records detected
+                    </span>
+                  )}
+
+                </div>
               </div>
 
+
               <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+
                 <table className="w-full text-left text-sm">
+
                   <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3">
                         Company
                       </th>
+
                       <th className="px-4 py-3">
                         Country
                       </th>
+
                       <th className="px-4 py-3">
                         Industry
+                      </th>
+
+                      <th className="px-4 py-3">
+                        CRM
                       </th>
                     </tr>
                   </thead>
 
+
                   <tbody className="divide-y divide-slate-100">
+
                     {companies
-                      .slice(0, 30)
-                      .map((company) => (
-                        <tr
-                          key={`${company.name}-${company.website}`}
-                        >
-                          <td className="px-4 py-3 font-medium text-slate-900">
-                            {company.name}
-                          </td>
+                      .slice(
+                        0,
+                        30
+                      )
+                      .map(
+                        (
+                          company
+                        ) => {
+                          const key =
+                            (
+                              company.domain ||
+                              company.website ||
+                              company.name
+                            ).toLowerCase();
 
-                          <td className="px-4 py-3 text-slate-600">
-                            {company.country ||
-                              "—"}
-                          </td>
+                          const crm =
+                            crmContexts[
+                              key
+                            ];
 
-                          <td className="px-4 py-3 text-slate-600">
-                            {company.industry ||
-                              "—"}
-                          </td>
-                        </tr>
-                      ))}
+                          return (
+                            <tr
+                              key={`${company.name}-${company.website}`}
+                            >
+                              <td className="px-4 py-3 font-medium text-slate-900">
+                                {
+                                  company.name
+                                }
+                              </td>
+
+                              <td className="px-4 py-3 text-slate-600">
+                                {company.country ||
+                                  "—"}
+                              </td>
+
+                              <td className="px-4 py-3 text-slate-600">
+                                {company.industry ||
+                                  "—"}
+                              </td>
+
+                              <td className="px-4 py-3">
+                                {crm ? (
+                                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                    {crm.status
+                                      .split(
+                                        "_"
+                                      )
+                                      .map(
+                                        (
+                                          word
+                                        ) =>
+                                          word
+                                            .charAt(
+                                              0
+                                            )
+                                            .toUpperCase() +
+                                          word.slice(
+                                            1
+                                          )
+                                      )
+                                      .join(
+                                        " "
+                                      )}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+
+                            </tr>
+                          );
+                        }
+                      )}
+
                   </tbody>
                 </table>
               </div>
 
-              {companies.length > 30 && (
+
+              {companies.length >
+                30 && (
                 <p className="mt-2 text-xs text-slate-400">
                   Previewing the first 30 accounts. All {companies.length} will be analyzed.
                 </p>
@@ -318,20 +546,48 @@ export default function CsvUploadPanel({
           )}
 
 
-          {companies.length > 0 && (
+          {companies.length >
+            0 &&
+            detectedCrmCount >
+              0 && (
+            <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+
+              <p className="text-sm font-semibold text-blue-950">
+                CRM context detected
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-blue-800/80">
+                The engine will use lifecycle status, recent activity, account ownership, and opportunity information when available.
+              </p>
+
+            </section>
+          )}
+
+
+          {companies.length >
+            0 && (
             <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+
               <div className="flex items-start gap-3">
+
                 <input
                   id="use-icp"
                   type="checkbox"
-                  checked={useIcp}
-                  onChange={(event) =>
+                  checked={
+                    useIcp
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setUseIcp(
-                      event.target.checked
+                      event
+                        .target
+                        .checked
                     )
                   }
                   className="mt-1 h-4 w-4"
                 />
+
 
                 <label
                   htmlFor="use-icp"
@@ -342,29 +598,34 @@ export default function CsvUploadPanel({
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Optional. All accounts stay in the analysis. ICP only adds fit context to the ranking.
+                    Optional. All accounts stay in the analysis. ICP only adds fit context to ranking.
                   </p>
                 </label>
+
               </div>
 
 
               {!useIcp && (
                 <div className="mt-4 rounded-xl bg-white/80 p-4 text-sm leading-6 text-slate-600">
-                  Without an ICP, the engine prioritizes using current signals,
-                  CRM context, and data confidence.
+                  Without an ICP, the engine prioritizes using current signals, CRM context, and data confidence.
                 </div>
               )}
 
 
               {useIcp && (
                 <div className="mt-6 space-y-6">
+
                   <SelectionGroup
                     title="Target countries"
-                    values={countries}
+                    values={
+                      countries
+                    }
                     selected={
                       selectedCountries
                     }
-                    onToggle={(value) =>
+                    onToggle={(
+                      value
+                    ) =>
                       toggleValue(
                         value,
                         selectedCountries,
@@ -377,17 +638,24 @@ export default function CsvUploadPanel({
                       )
                     }
                     onClear={() =>
-                      setSelectedCountries([])
+                      setSelectedCountries(
+                        []
+                      )
                     }
                   />
 
+
                   <SelectionGroup
                     title="Target industries"
-                    values={industries}
+                    values={
+                      industries
+                    }
                     selected={
                       selectedIndustries
                     }
-                    onToggle={(value) =>
+                    onToggle={(
+                      value
+                    ) =>
                       toggleValue(
                         value,
                         selectedIndustries,
@@ -400,9 +668,12 @@ export default function CsvUploadPanel({
                       )
                     }
                     onClear={() =>
-                      setSelectedIndustries([])
+                      setSelectedIndustries(
+                        []
+                      )
                     }
                   />
+
 
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
@@ -410,9 +681,12 @@ export default function CsvUploadPanel({
                     </p>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
+
                       <NumberField
                         label="Minimum employees"
-                        value={minEmployees}
+                        value={
+                          minEmployees
+                        }
                         onChange={
                           setMinEmployees
                         }
@@ -420,15 +694,20 @@ export default function CsvUploadPanel({
 
                       <NumberField
                         label="Maximum employees"
-                        value={maxEmployees}
+                        value={
+                          maxEmployees
+                        }
                         onChange={
                           setMaxEmployees
                         }
                       />
+
                     </div>
                   </div>
+
                 </div>
               )}
+
             </section>
           )}
 
@@ -438,23 +717,30 @@ export default function CsvUploadPanel({
               {error}
             </div>
           )}
+
         </div>
 
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-5">
+
           <p className="hidden text-xs text-slate-400 sm:block">
             {companies.length
               ? `${companies.length} accounts will be analyzed`
               : "Upload a CSV to continue"}
           </p>
 
+
           <div className="flex gap-3">
+
             <button
-              onClick={onClose}
+              onClick={
+                onClose
+              }
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
             >
               Cancel
             </button>
+
 
             <button
               onClick={
@@ -473,8 +759,10 @@ export default function CsvUploadPanel({
                     ""
                   } Accounts`}
             </button>
+
           </div>
         </div>
+
       </div>
     </div>
   );
@@ -492,13 +780,19 @@ function SelectionGroup({
   title: string;
   values: string[];
   selected: string[];
-  onToggle: (value: string) => void;
-  onSelectAll: () => void;
-  onClear: () => void;
+  onToggle: (
+    value: string
+  ) => void;
+  onSelectAll:
+    () => void;
+  onClear:
+    () => void;
 }) {
   return (
     <div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
+
         <div>
           <p className="text-sm font-semibold text-slate-900">
             {title}
@@ -509,10 +803,14 @@ function SelectionGroup({
           </p>
         </div>
 
+
         <div className="flex gap-3 text-xs font-medium">
+
           <button
             type="button"
-            onClick={onSelectAll}
+            onClick={
+              onSelectAll
+            }
             className="text-indigo-700"
           >
             Select all
@@ -520,43 +818,58 @@ function SelectionGroup({
 
           <button
             type="button"
-            onClick={onClear}
+            onClick={
+              onClear
+            }
             className="text-slate-500"
           >
             Clear
           </button>
+
         </div>
       </div>
 
+
       {values.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          {values.map((value) => {
-            const active =
-              selected.includes(value);
 
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  onToggle(value)
-                }
-                className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                  active
-                    ? "border-indigo-600 bg-indigo-600 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
-                }`}
-              >
-                {value}
-              </button>
-            );
-          })}
+          {values.map(
+            (value) => {
+              const active =
+                selected.includes(
+                  value
+                );
+
+              return (
+                <button
+                  key={
+                    value
+                  }
+                  type="button"
+                  onClick={() =>
+                    onToggle(
+                      value
+                    )
+                  }
+                  className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                    active
+                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"
+                  }`}
+                >
+                  {value}
+                </button>
+              );
+            }
+          )}
+
         </div>
       ) : (
         <p className="mt-3 text-sm text-slate-400">
           No values detected in this CSV.
         </p>
       )}
+
     </div>
   );
 }
@@ -569,10 +882,13 @@ function NumberField({
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (
+    value: string
+  ) => void;
 }) {
   return (
     <label>
+
       <span className="text-xs font-medium text-slate-600">
         {label}
       </span>
@@ -580,12 +896,19 @@ function NumberField({
       <input
         type="number"
         min="0"
-        value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
+        value={
+          value
+        }
+        onChange={(
+          event
+        ) =>
+          onChange(
+            event.target.value
+          )
         }
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-indigo-400"
       />
+
     </label>
   );
 }

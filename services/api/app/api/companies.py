@@ -1,10 +1,20 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    HTTPException,
+    UploadFile,
+)
 
-from services.api.app.integrations.crm.demo_provider import DemoCRMProvider
+from services.api.app.integrations.crm.demo_provider import (
+    DemoCRMProvider,
+)
 from services.api.app.integrations.enrichment.website_provider import (
     WebsiteEnrichmentProvider,
 )
-from services.api.app.schemas.company import CompanyInput, CompanyNormalized
+from services.api.app.schemas.company import (
+    CompanyInput,
+    CompanyNormalized,
+)
 from services.api.app.schemas.enrichment import (
     CompanyEnrichmentRequest,
     WebsiteEnrichment,
@@ -16,30 +26,53 @@ from services.api.app.schemas.scoring import (
     RankedCompanyScore,
     ScoreCompanyRequest,
 )
-from services.api.app.services.company_normalizer import normalize_company
-from services.api.app.services.csv_importer import import_companies_from_csv
+from services.api.app.services.company_normalizer import (
+    normalize_company,
+)
+from services.api.app.services.csv_importer import (
+    import_accounts_from_csv,
+)
 from services.api.app.services.icp_scorer import (
     score_and_rank_companies,
     score_company,
 )
+
 
 router = APIRouter(
     prefix="/companies",
     tags=["Companies"],
 )
 
+
 crm_provider = DemoCRMProvider()
-website_enrichment_provider = WebsiteEnrichmentProvider()
+
+website_enrichment_provider = (
+    WebsiteEnrichmentProvider()
+)
 
 
-@router.post("/", response_model=CompanyNormalized)
-def create_company(company: CompanyInput):
-    return normalize_company(company)
+@router.post(
+    "/",
+    response_model=CompanyNormalized,
+)
+def create_company(
+    company: CompanyInput,
+):
+    return normalize_company(
+        company
+    )
 
 
 @router.post("/import")
-async def import_companies(file: UploadFile = File(...)):
-    if not file.filename or not file.filename.lower().endswith(".csv"):
+async def import_companies(
+    file: UploadFile = File(...),
+):
+    if (
+        not file.filename
+        or not file.filename.lower().endswith(
+            ".csv"
+        )
+    ):
         raise HTTPException(
             status_code=400,
             detail="Please upload a CSV file.",
@@ -48,31 +81,59 @@ async def import_companies(file: UploadFile = File(...)):
     content = await file.read()
 
     try:
-        companies = import_companies_from_csv(content)
+        (
+            companies,
+            crm_contexts,
+        ) = import_accounts_from_csv(
+            content
+        )
+
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=400,
-            detail="Could not read the CSV file.",
+            detail=(
+                "Could not read the CSV file."
+            ),
         )
 
     return {
-        "imported_count": len(companies),
+        "imported_count": len(
+            companies
+        ),
+        "detected_crm_count": len(
+            crm_contexts
+        ),
         "companies": companies,
+        "crm_contexts": crm_contexts,
     }
 
 
-@router.post("/enrich", response_model=WebsiteEnrichment)
-async def enrich_company(request: CompanyEnrichmentRequest):
-    return await website_enrichment_provider.enrich(
-        request.company
+@router.post(
+    "/enrich",
+    response_model=WebsiteEnrichment,
+)
+async def enrich_company(
+    request: CompanyEnrichmentRequest,
+):
+    return (
+        await website_enrichment_provider.enrich(
+            request.company
+        )
     )
 
 
-@router.post("/score", response_model=CompanyScore)
-def score_company_endpoint(request: ScoreCompanyRequest):
+@router.post(
+    "/score",
+    response_model=CompanyScore,
+)
+def score_company_endpoint(
+    request: ScoreCompanyRequest,
+):
     crm_context = (
         request.crm_context
-        or crm_provider.get_context(request.company)
+        or crm_provider.get_context(
+            request.company
+        )
     )
 
     return score_company(
@@ -82,13 +143,22 @@ def score_company_endpoint(request: ScoreCompanyRequest):
     )
 
 
-@router.post("/rank", response_model=BatchScoreResponse)
-def rank_companies(request: BatchScoreRequest):
-    crm_contexts = crm_provider.get_contexts(
-        request.companies
+@router.post(
+    "/rank",
+    response_model=BatchScoreResponse,
+)
+def rank_companies(
+    request: BatchScoreRequest,
+):
+    crm_contexts = (
+        crm_provider.get_contexts(
+            request.companies
+        )
     )
 
-    crm_contexts.update(request.crm_contexts)
+    crm_contexts.update(
+        request.crm_contexts
+    )
 
     scored = score_and_rank_companies(
         companies=request.companies,
@@ -101,10 +171,15 @@ def rank_companies(request: BatchScoreRequest):
             rank=index,
             **item.model_dump(),
         )
-        for index, item in enumerate(scored, start=1)
+        for index, item in enumerate(
+            scored,
+            start=1,
+        )
     ]
 
     return BatchScoreResponse(
-        total_companies=len(ranked),
+        total_companies=len(
+            ranked
+        ),
         results=ranked,
     )

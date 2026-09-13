@@ -14,6 +14,21 @@ export type Company = {
 };
 
 
+export type CRMContext = {
+  status:
+    | "new_prospect"
+    | "existing_lead"
+    | "existing_customer"
+    | "open_opportunity"
+    | "recently_contacted";
+
+  owner: string | null;
+  opportunity_stage: string | null;
+  days_since_last_contact: number | null;
+  source: string;
+};
+
+
 export type AnalysisRunSummary = {
   id: string;
   workspace_name: string;
@@ -76,6 +91,14 @@ export type ICPInput = {
 };
 
 
+export type CsvImportResponse = {
+  imported_count: number;
+  detected_crm_count: number;
+  companies: Company[];
+  crm_contexts: Record<string, CRMContext>;
+};
+
+
 export async function getAnalysisRuns(): Promise<{
   total_runs: number;
   runs: AnalysisRunSummary[];
@@ -113,13 +136,13 @@ export async function getAnalysisRun(
 
 export async function uploadCompaniesCsv(
   file: File
-): Promise<{
-  imported_count: number;
-  companies: Company[];
-}> {
+): Promise<CsvImportResponse> {
   const formData = new FormData();
 
-  formData.append("file", file);
+  formData.append(
+    "file",
+    file
+  );
 
   const response = await fetch(
     `${API_URL}/companies/import`,
@@ -130,7 +153,9 @@ export async function uploadCompaniesCsv(
   );
 
   if (!response.ok) {
-    throw new Error("CSV import failed");
+    throw new Error(
+      "CSV import failed"
+    );
   }
 
   return response.json();
@@ -140,38 +165,52 @@ export async function uploadCompaniesCsv(
 export async function runAnalysis(
   companies: Company[],
   icp: ICPInput,
-  workspaceName = "CSV Workspace"
+  workspaceName = "CSV Workspace",
+  crmContexts: Record<
+    string,
+    CRMContext
+  > = {}
 ) {
-  const cleanCompanies = companies.map(
-    (company) => ({
-      name: company.name,
-      website: company.website,
-      country: company.country,
-      industry: company.industry,
-      employee_count:
-        company.employee_count,
-      linkedin_url: company.linkedin_url,
-    })
-  );
+  const cleanCompanies =
+    companies.map(
+      (company) => ({
+        name: company.name,
+        website: company.website,
+        country: company.country,
+        industry: company.industry,
+        employee_count:
+          company.employee_count,
+        linkedin_url:
+          company.linkedin_url,
+      })
+    );
 
   const response = await fetch(
     `${API_URL}/analysis/run`,
     {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
       body: JSON.stringify({
-        workspace_name: workspaceName,
-        companies: cleanCompanies,
+        workspace_name:
+          workspaceName,
+        companies:
+          cleanCompanies,
         icp,
-        use_website_enrichment: true,
+        crm_contexts:
+          crmContexts,
+        use_website_enrichment:
+          true,
       }),
     }
   );
 
   if (!response.ok) {
-    throw new Error("Analysis failed");
+    throw new Error(
+      "Analysis failed"
+    );
   }
 
   return response.json();

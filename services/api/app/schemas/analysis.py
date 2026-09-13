@@ -2,32 +2,67 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 from services.api.app.schemas.company import (
     CompanyInput,
     CompanyNormalized,
 )
-from services.api.app.schemas.enrichment import WebsiteEnrichment
-from services.api.app.schemas.scoring import CompanyScore, ICPProfile
+from services.api.app.schemas.crm import (
+    CRMContext,
+)
+from services.api.app.schemas.enrichment import (
+    WebsiteEnrichment,
+)
+from services.api.app.schemas.scoring import (
+    CompanyScore,
+    ICPProfile,
+)
 
 
 class AnalysisRequest(BaseModel):
     companies: list[CompanyInput]
-    icp: ICPProfile = Field(default_factory=ICPProfile)
-    workspace_name: str = "Demo Workspace"
+
+    icp: ICPProfile = Field(
+        default_factory=ICPProfile
+    )
+
+    crm_contexts: dict[
+        str,
+        CRMContext
+    ] = Field(
+        default_factory=dict
+    )
+
+    workspace_name: str = (
+        "Demo Workspace"
+    )
+
     use_website_enrichment: bool = True
 
 
-class CompanyAnalysisResult(CompanyScore):
+class CompanyAnalysisResult(
+    CompanyScore
+):
     rank: int
     enrichment: WebsiteEnrichment
 
 
 class AnalysisResponse(BaseModel):
-    analysis_run_id: Optional[UUID] = None
+    analysis_run_id: Optional[
+        UUID
+    ] = None
+
     total_companies: int
-    results: list[CompanyAnalysisResult] = Field(default_factory=list)
+
+    results: list[
+        CompanyAnalysisResult
+    ] = Field(
+        default_factory=list
+    )
 
 
 class AnalysisRunSummary(BaseModel):
@@ -37,12 +72,18 @@ class AnalysisRunSummary(BaseModel):
     created_at: datetime
 
 
-class AnalysisRunListResponse(BaseModel):
+class AnalysisRunListResponse(
+    BaseModel
+):
     total_runs: int
-    runs: list[AnalysisRunSummary]
+    runs: list[
+        AnalysisRunSummary
+    ]
 
 
-class StoredAnalysisResult(BaseModel):
+class StoredAnalysisResult(
+    BaseModel
+):
     company: CompanyNormalized
 
     rank: int
@@ -75,4 +116,7 @@ class AnalysisRunDetail(BaseModel):
     created_at: datetime
     icp: dict
     total_companies: int
-    results: list[StoredAnalysisResult]
+
+    results: list[
+        StoredAnalysisResult
+    ]

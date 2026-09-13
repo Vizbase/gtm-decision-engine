@@ -142,6 +142,7 @@ async def run_analysis(
         use_website_enrichment=(
             request.use_website_enrichment
         ),
+        crm_contexts=request.crm_contexts,
     )
 
     repository = AnalysisRepository(db)
