@@ -12,6 +12,7 @@ from services.api.app.schemas.crm import (
     CRMStatus,
 )
 from services.api.app.services.company_normalizer import (
+    account_context_key,
     normalize_company,
 )
 
@@ -27,6 +28,7 @@ COMPANY_COLUMN_ALIASES = {
     "website": [
         "website",
         "domain",
+        "company_domain_name",
         "company_website",
         "url",
         "account_website",
@@ -37,10 +39,12 @@ COMPANY_COLUMN_ALIASES = {
         "location",
         "company_country",
         "billing_country",
+        "country_region",
         "account_country",
     ],
     "industry": [
         "industry",
+        "gtm_industry",
         "company_industry",
         "account_industry",
     ],
@@ -56,6 +60,7 @@ COMPANY_COLUMN_ALIASES = {
         "linkedin",
         "company_linkedin",
         "linkedin_company_page",
+        "linkedin_company_url",
     ],
 }
 
@@ -67,6 +72,8 @@ CRM_COLUMN_ALIASES = {
         "lead_status",
         "account_status",
         "customer_status",
+        "account_type",
+        "type",
     ],
     "owner": [
         "account_owner",
@@ -96,6 +103,8 @@ CRM_COLUMN_ALIASES = {
     "source": [
         "source_platform",
         "crm_source",
+        "record_source",
+        "account_source",
         "source",
         "platform",
     ],
@@ -120,15 +129,49 @@ def normalize_header(value: str) -> str:
     return value.strip("_")
 
 
-def get_csv_headers(
+def detect_delimiter(
     content: bytes,
-) -> list[str]:
+) -> str:
     text = content.decode(
         "utf-8-sig"
     )
 
-    reader = csv.DictReader(
-        io.StringIO(text)
+    sample = text[:10000]
+
+    try:
+        dialect = csv.Sniffer().sniff(
+            sample,
+            delimiters=",;\t|",
+        )
+
+        return dialect.delimiter
+
+    except csv.Error:
+        return ","
+
+
+def build_reader(
+    content: bytes,
+) -> csv.DictReader:
+    text = content.decode(
+        "utf-8-sig"
+    )
+
+    delimiter = detect_delimiter(
+        content
+    )
+
+    return csv.DictReader(
+        io.StringIO(text),
+        delimiter=delimiter,
+    )
+
+
+def get_csv_headers(
+    content: bytes,
+) -> list[str]:
+    reader = build_reader(
+        content
     )
 
     return [
@@ -283,6 +326,7 @@ def parse_date(
         "%d.%m.%Y",
         "%d/%m/%Y",
         "%m/%d/%Y",
+        "%d.%m.%y",
     ]
 
     for date_format in formats:
@@ -566,23 +610,10 @@ def build_crm_context(
 
 
 def company_context_key(
-    company:
-        CompanyNormalized,
+    company: CompanyNormalized,
 ) -> str:
-    if company.domain:
-        return (
-            company.domain.lower()
-        )
-
-    if company.website:
-        return (
-            company.website.lower()
-        )
-
-    return (
-        company.name
-        .strip()
-        .lower()
+    return account_context_key(
+        company
     )
 
 
@@ -615,12 +646,8 @@ def import_accounts_from_csv(
         )
     )
 
-    text = content.decode(
-        "utf-8-sig"
-    )
-
-    reader = csv.DictReader(
-        io.StringIO(text)
+    reader = build_reader(
+        content
     )
 
     companies = []

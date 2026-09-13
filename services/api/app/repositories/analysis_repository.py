@@ -50,6 +50,15 @@ class AnalysisRepository:
                 select(Company).where(
                     Company.workspace_id == workspace.id,
                     Company.domain == company_data.domain,
+                    Company.name == company_data.name,
+                )
+            )
+        else:
+            company = self.db.scalar(
+                select(Company).where(
+                    Company.workspace_id == workspace.id,
+                    Company.domain.is_(None),
+                    Company.name == company_data.name,
                 )
             )
 

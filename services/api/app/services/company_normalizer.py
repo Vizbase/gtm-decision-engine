@@ -36,6 +36,34 @@ def extract_domain(website: str | None) -> str | None:
     return domain or None
 
 
+
+def account_context_key(
+    company: CompanyNormalized,
+) -> str:
+    """
+    Account-level identity used for CRM context.
+
+    Domain alone is not sufficient because CRMs may contain
+    multiple account records that share the same website/domain.
+    Preserve the original CRM company name as part of the key.
+    """
+    name_key = " ".join(
+        company.name.strip().lower().split()
+    )
+
+    if company.domain:
+        return (
+            f"{company.domain.lower()}::{name_key}"
+        )
+
+    if company.website:
+        return (
+            f"{company.website.lower()}::{name_key}"
+        )
+
+    return f"name::{name_key}"
+
+
 def normalize_company(company: CompanyInput) -> CompanyNormalized:
     website = normalize_website(company.website)
 

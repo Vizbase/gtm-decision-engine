@@ -1,4 +1,7 @@
 from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.services.company_normalizer import (
+    account_context_key,
+)
 from services.api.app.schemas.crm import CRMContext
 from services.api.app.schemas.enrichment import WebsiteEnrichment
 from services.api.app.schemas.scoring import CompanyScore, ICPProfile
@@ -234,9 +237,16 @@ def score_and_rank_companies(
         domain = (company.domain or "").lower()
 
         crm_context = normalized_crm_contexts.get(
-            domain,
-            CRMContext(),
+            account_context_key(
+                company
+            )
         )
+
+        if crm_context is None:
+            crm_context = normalized_crm_contexts.get(
+                domain,
+                CRMContext(),
+            )
 
         enrichment = normalized_enrichment_contexts.get(
             domain
