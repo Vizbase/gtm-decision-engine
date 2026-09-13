@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from services.api.app.schemas.company import CompanyInput
+
+from services.api.app.schemas.company import CompanyInput, CompanyNormalized
+from services.api.app.services.company_normalizer import normalize_company
 
 router = APIRouter(
     prefix="/companies",
@@ -7,9 +9,6 @@ router = APIRouter(
 )
 
 
-@router.post("/")
+@router.post("/", response_model=CompanyNormalized)
 def create_company(company: CompanyInput):
-    return {
-        "status": "received",
-        "company": company,
-    }
+    return normalize_company(company)
