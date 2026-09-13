@@ -37,6 +37,12 @@ export default function CompanyDetailPanel({
             <p className="mt-1 text-sm text-slate-500">
               {result.company.domain || "No domain"}
             </p>
+
+            {result.potential_duplicate && (
+              <span className="mt-3 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                Potential Duplicate
+              </span>
+            )}
           </div>
 
           <button
@@ -111,6 +117,44 @@ export default function CompanyDetailPanel({
             />
           </Section>
 
+
+          {result.potential_duplicate && (
+            <Section title="Data quality">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">
+                  Potential duplicate CRM accounts
+                </p>
+
+                <p className="mt-2 text-sm leading-6 text-amber-800">
+                  This domain is used by{" "}
+                  {result.duplicate_group_size} account records.
+                  Review them before merging or removing anything.
+                </p>
+
+                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-amber-700">
+                  Accounts sharing this domain
+                </p>
+
+                <ul className="mt-2 space-y-1">
+                  {result.duplicate_account_names.map(
+                    (name, index) => (
+                      <li
+                        key={`${name}-${index}`}
+                        className="text-sm text-amber-900"
+                      >
+                        • {name}
+                      </li>
+                    )
+                  )}
+                </ul>
+
+                <p className="mt-3 text-xs text-amber-700">
+                  Shared domain:{" "}
+                  {result.company.domain || "Unknown"}
+                </p>
+              </div>
+            </Section>
+          )}
 
           <Section title="CRM context">
             <InfoRow

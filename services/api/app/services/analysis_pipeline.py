@@ -25,6 +25,9 @@ from services.api.app.schemas.scoring import (
 from services.api.app.services.company_normalizer import (
     normalize_company,
 )
+from services.api.app.services.duplicate_detector import (
+    build_duplicate_groups,
+)
 from services.api.app.services.icp_scorer import (
     score_and_rank_companies,
 )
@@ -74,6 +77,12 @@ class AnalysisPipeline:
             )
             for company in companies
         ]
+
+        duplicate_groups = (
+            build_duplicate_groups(
+                normalized_companies
+            )
+        )
 
         enrichment_by_company = (
             await self._enrich_companies(
@@ -151,10 +160,38 @@ class AnalysisPipeline:
                 )
             )
 
+            domain = (
+                scored.company.domain
+                or ""
+            ).lower()
+
+            duplicate_account_names = (
+                duplicate_groups.get(
+                    domain,
+                    [],
+                )
+            )
+
             results.append(
                 CompanyAnalysisResult(
                     rank=rank,
                     enrichment=enrichment,
+                    potential_duplicate=(
+                        len(
+                            duplicate_account_names
+                        )
+                        > 1
+                    ),
+                    duplicate_group_size=(
+                        len(
+                            duplicate_account_names
+                        )
+                        if duplicate_account_names
+                        else 1
+                    ),
+                    duplicate_account_names=(
+                        duplicate_account_names
+                    ),
                     **scored.model_dump(),
                 )
             )

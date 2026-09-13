@@ -57,6 +57,10 @@ export type StoredAnalysisResult = {
   crm_status: string;
   crm_source: string;
 
+  potential_duplicate: boolean;
+  duplicate_group_size: number;
+  duplicate_account_names: string[];
+
   recommended_action: string;
   action_reason: string;
 

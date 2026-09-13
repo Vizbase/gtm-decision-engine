@@ -50,6 +50,12 @@ class CompanyAnalysisResult(
     rank: int
     enrichment: WebsiteEnrichment
 
+    potential_duplicate: bool = False
+    duplicate_group_size: int = 1
+    duplicate_account_names: list[str] = Field(
+        default_factory=list
+    )
+
 
 class AnalysisResponse(BaseModel):
     analysis_run_id: Optional[
@@ -99,6 +105,12 @@ class StoredAnalysisResult(
 
     crm_status: str
     crm_source: str
+
+    potential_duplicate: bool = False
+    duplicate_group_size: int = 1
+    duplicate_account_names: list[str] = Field(
+        default_factory=list
+    )
 
     recommended_action: str
     action_reason: str

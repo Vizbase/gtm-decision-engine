@@ -121,6 +121,15 @@ class AnalysisRepository:
                 "priority_level": result.priority_level,
                 "confidence_level": result.confidence_level,
                 "crm_source": result.crm_source,
+                "potential_duplicate": (
+                    result.potential_duplicate
+                ),
+                "duplicate_group_size": (
+                    result.duplicate_group_size
+                ),
+                "duplicate_account_names": (
+                    result.duplicate_account_names
+                ),
                 "reasons": result.reasons,
                 "signal_reasons": result.signal_reasons,
                 "confidence_reasons": result.confidence_reasons,

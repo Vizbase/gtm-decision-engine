@@ -309,6 +309,26 @@ export default function Home() {
   const workNow =
     filterCounts.work_now;
 
+  const duplicateAccounts =
+    results.filter(
+      (item) =>
+        item.potential_duplicate
+    ).length;
+
+  const duplicateGroups =
+    new Set(
+      results
+        .filter(
+          (item) =>
+            item.potential_duplicate &&
+            item.company.domain
+        )
+        .map(
+          (item) =>
+            item.company.domain!.toLowerCase()
+        )
+    ).size;
+
   const isDemo =
     analysis?.workspace_name === "Demo Workspace";
 
@@ -423,7 +443,7 @@ export default function Home() {
             />
 
 
-            <section className="grid gap-4 md:grid-cols-3">
+            <section className="grid gap-4 md:grid-cols-4">
               <MetricCard
                 label="Accounts analyzed"
                 value={results.length}
@@ -437,6 +457,12 @@ export default function Home() {
               <MetricCard
                 label="Work now"
                 value={workNow}
+              />
+
+              <MetricCard
+                label="Potential duplicate groups"
+                value={duplicateGroups}
+                detail={`${duplicateAccounts} account records affected`}
               />
             </section>
 
@@ -547,6 +573,13 @@ export default function Home() {
                                 .domain ??
                                 "No domain"}
                             </div>
+
+                            {result.potential_duplicate && (
+                              <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                                Potential Duplicate ·{" "}
+                                {result.duplicate_group_size} records
+                              </span>
+                            )}
                           </td>
 
                           <td className="px-6 py-5">
@@ -665,9 +698,11 @@ export default function Home() {
 function MetricCard({
   label,
   value,
+  detail,
 }: {
   label: string;
   value: number;
+  detail?: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -678,6 +713,12 @@ function MetricCard({
       <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
         {value}
       </p>
+
+      {detail && (
+        <p className="mt-2 text-xs text-slate-400">
+          {detail}
+        </p>
+      )}
     </div>
   );
 }

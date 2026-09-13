@@ -288,6 +288,18 @@ def get_analysis_run(
                     "crm_source",
                     "unknown",
                 ),
+                potential_duplicate=details.get(
+                    "potential_duplicate",
+                    False,
+                ),
+                duplicate_group_size=details.get(
+                    "duplicate_group_size",
+                    1,
+                ),
+                duplicate_account_names=details.get(
+                    "duplicate_account_names",
+                    [],
+                ),
                 recommended_action=(
                     result.recommended_action
                 ),
