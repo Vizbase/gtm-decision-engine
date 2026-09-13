@@ -29,14 +29,20 @@ def create_company(company: CompanyInput):
 @router.post("/import")
 async def import_companies(file: UploadFile = File(...)):
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a CSV file.")
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a CSV file.",
+        )
 
     content = await file.read()
 
     try:
         companies = import_companies_from_csv(content)
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="Could not read the CSV file.")
+        raise HTTPException(
+            status_code=400,
+            detail="Could not read the CSV file.",
+        )
 
     return {
         "imported_count": len(companies),
@@ -46,14 +52,19 @@ async def import_companies(file: UploadFile = File(...)):
 
 @router.post("/score", response_model=CompanyScore)
 def score_company_endpoint(request: ScoreCompanyRequest):
-    return score_company(request.company, request.icp)
+    return score_company(
+        company=request.company,
+        icp=request.icp,
+        crm_context=request.crm_context,
+    )
 
 
 @router.post("/rank", response_model=BatchScoreResponse)
 def rank_companies(request: BatchScoreRequest):
     scored = score_and_rank_companies(
-        request.companies,
-        request.icp,
+        companies=request.companies,
+        icp=request.icp,
+        crm_contexts=request.crm_contexts,
     )
 
     ranked = [

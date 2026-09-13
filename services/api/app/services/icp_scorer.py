@@ -1,4 +1,5 @@
 from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.crm import CRMContext
 from services.api.app.schemas.scoring import CompanyScore, ICPProfile
 from services.api.app.services.data_confidence import calculate_data_confidence
 from services.api.app.services.decision_engine import make_decision
@@ -7,7 +8,10 @@ from services.api.app.services.decision_engine import make_decision
 def score_company(
     company: CompanyNormalized,
     icp: ICPProfile,
+    crm_context: CRMContext | None = None,
 ) -> CompanyScore:
+    crm_context = crm_context or CRMContext()
+
     score = 0
     reasons = []
 
@@ -62,10 +66,11 @@ def score_company(
         calculate_data_confidence(company)
     )
 
-    # Recommended action
+    # Final GTM decision
     decision = make_decision(
         icp_score=score,
         data_confidence=data_confidence,
+        crm_context=crm_context,
     )
 
     return CompanyScore(
@@ -74,6 +79,8 @@ def score_company(
         fit_level=fit_level,
         data_confidence=data_confidence,
         confidence_level=confidence_level,
+        crm_status=crm_context.status.value,
+        crm_source=crm_context.source,
         recommended_action=decision.recommended_action.value,
         action_reason=decision.action_reason,
         reasons=reasons,
@@ -84,11 +91,32 @@ def score_company(
 def score_and_rank_companies(
     companies: list[CompanyNormalized],
     icp: ICPProfile,
+    crm_contexts: dict[str, CRMContext] | None = None,
 ) -> list[CompanyScore]:
-    scored = [
-        score_company(company, icp)
-        for company in companies
-    ]
+    crm_contexts = crm_contexts or {}
+
+    normalized_contexts = {
+        domain.lower(): context
+        for domain, context in crm_contexts.items()
+    }
+
+    scored = []
+
+    for company in companies:
+        domain = (company.domain or "").lower()
+
+        crm_context = normalized_contexts.get(
+            domain,
+            CRMContext(),
+        )
+
+        scored.append(
+            score_company(
+                company=company,
+                icp=icp,
+                crm_context=crm_context,
+            )
+        )
 
     scored.sort(
         key=lambda item: (

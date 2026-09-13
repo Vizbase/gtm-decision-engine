@@ -1,12 +1,14 @@
-from pydantic import BaseModel, Field
 from typing import Optional
 
+from pydantic import BaseModel, Field
+
 from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.crm import CRMContext
 
 
 class ICPProfile(BaseModel):
-    target_countries: list[str] = []
-    target_industries: list[str] = []
+    target_countries: list[str] = Field(default_factory=list)
+    target_industries: list[str] = Field(default_factory=list)
     min_employees: Optional[int] = None
     max_employees: Optional[int] = None
 
@@ -20,6 +22,9 @@ class CompanyScore(BaseModel):
     data_confidence: int = Field(ge=0, le=100)
     confidence_level: str
 
+    crm_status: str
+    crm_source: str
+
     recommended_action: str
     action_reason: str
 
@@ -30,11 +35,15 @@ class CompanyScore(BaseModel):
 class ScoreCompanyRequest(BaseModel):
     company: CompanyNormalized
     icp: ICPProfile
+    crm_context: CRMContext = Field(default_factory=CRMContext)
 
 
 class BatchScoreRequest(BaseModel):
     companies: list[CompanyNormalized]
     icp: ICPProfile
+
+    # Key = company domain, for example "acme.com"
+    crm_contexts: dict[str, CRMContext] = Field(default_factory=dict)
 
 
 class RankedCompanyScore(CompanyScore):
