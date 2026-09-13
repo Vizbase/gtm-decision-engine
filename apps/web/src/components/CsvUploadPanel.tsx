@@ -7,7 +7,10 @@ import {
   useState,
 } from "react";
 
+import ColumnMappingPanel from "@/components/ColumnMappingPanel";
+
 import {
+  ColumnMapping,
   Company,
   CRMContext,
   getAnalysisRun,
@@ -22,9 +25,7 @@ type Props = {
 
   onAnalysisComplete: (
     analysis: Awaited<
-      ReturnType<
-        typeof getAnalysisRun
-      >
+      ReturnType<typeof getAnalysisRun>
     >
   ) => void;
 };
@@ -42,16 +43,27 @@ function uniqueValues(
             company[key]?.trim()
         )
         .filter(
-          (
-            value
-          ): value is string =>
+          (value): value is string =>
             Boolean(value)
         )
     )
-  ).sort(
-    (a, b) =>
-      a.localeCompare(b)
+  ).sort((a, b) =>
+    a.localeCompare(b)
   );
+}
+
+
+function formatStatus(
+  value: string
+) {
+  return value
+    .split("_")
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() +
+        word.slice(1)
+    )
+    .join(" ");
 }
 
 
@@ -60,9 +72,12 @@ export default function CsvUploadPanel({
   onAnalysisComplete,
 }: Props) {
   const fileInputRef =
-    useRef<HTMLInputElement>(
-      null
-    );
+    useRef<HTMLInputElement>(null);
+
+  const [
+    uploadedFile,
+    setUploadedFile,
+  ] = useState<File | null>(null);
 
   const [
     companies,
@@ -73,10 +88,7 @@ export default function CsvUploadPanel({
     crmContexts,
     setCrmContexts,
   ] = useState<
-    Record<
-      string,
-      CRMContext
-    >
+    Record<string, CRMContext>
   >({});
 
   const [
@@ -88,6 +100,31 @@ export default function CsvUploadPanel({
     fileName,
     setFileName,
   ] = useState("");
+
+  const [
+    headers,
+    setHeaders,
+  ] = useState<string[]>([]);
+
+  const [
+    detectedMapping,
+    setDetectedMapping,
+  ] = useState<ColumnMapping>({});
+
+  const [
+    mapping,
+    setMapping,
+  ] = useState<ColumnMapping>({});
+
+  const [
+    mappingDirty,
+    setMappingDirty,
+  ] = useState(false);
+
+  const [
+    applyingMapping,
+    setApplyingMapping,
+  ] = useState(false);
 
   const [
     useIcp,
@@ -127,31 +164,61 @@ export default function CsvUploadPanel({
   const [
     error,
     setError,
-  ] = useState<
-    string | null
-  >(null);
+  ] = useState<string | null>(null);
 
 
-  const countries =
-    useMemo(
-      () =>
-        uniqueValues(
-          companies,
-          "country"
-        ),
-      [companies]
+  const countries = useMemo(
+    () =>
+      uniqueValues(
+        companies,
+        "country"
+      ),
+    [companies]
+  );
+
+
+  const industries = useMemo(
+    () =>
+      uniqueValues(
+        companies,
+        "industry"
+      ),
+    [companies]
+  );
+
+
+  function resetIcp() {
+    setUseIcp(false);
+    setSelectedCountries([]);
+    setSelectedIndustries([]);
+    setMinEmployees("");
+    setMaxEmployees("");
+  }
+
+
+  function applyImportResult(
+    result: Awaited<
+      ReturnType<
+        typeof uploadCompaniesCsv
+      >
+    >
+  ) {
+    setCompanies(
+      result.companies
     );
 
-
-  const industries =
-    useMemo(
-      () =>
-        uniqueValues(
-          companies,
-          "industry"
-        ),
-      [companies]
+    setCrmContexts(
+      result.crm_contexts || {}
     );
+
+    setDetectedCrmCount(
+      result.detected_crm_count || 0
+    );
+
+    setHeaders(
+      result.headers || []
+    );
+  }
 
 
   async function handleFile(
@@ -174,35 +241,26 @@ export default function CsvUploadPanel({
           file
         );
 
-      setCompanies(
-        result.companies
+      setUploadedFile(file);
+      setFileName(file.name);
+
+      setDetectedMapping(
+        result.detected_mapping || {}
       );
 
-      setCrmContexts(
-        result.crm_contexts || {}
+      setMapping(
+        result.applied_mapping ||
+          result.detected_mapping ||
+          {}
       );
 
-      setDetectedCrmCount(
-        result.detected_crm_count ||
-          0
+      setMappingDirty(false);
+
+      applyImportResult(
+        result
       );
 
-      setFileName(
-        file.name
-      );
-
-      setUseIcp(false);
-
-      setSelectedCountries(
-        []
-      );
-
-      setSelectedIndustries(
-        []
-      );
-
-      setMinEmployees("");
-      setMaxEmployees("");
+      resetIcp();
 
     } catch {
       setError(
@@ -211,6 +269,82 @@ export default function CsvUploadPanel({
 
     } finally {
       setLoadingFile(false);
+    }
+  }
+
+
+  function handleMappingChange(
+    field: string,
+    sourceColumn: string
+  ) {
+    setMapping(
+      (current) => {
+        const next = {
+          ...current,
+        };
+
+        if (sourceColumn) {
+          next[field] =
+            sourceColumn;
+        } else {
+          delete next[field];
+        }
+
+        return next;
+      }
+    );
+
+    setMappingDirty(true);
+  }
+
+
+  async function handleApplyMapping() {
+    if (
+      !uploadedFile
+    ) {
+      return;
+    }
+
+    if (
+      !mapping.name
+    ) {
+      setError(
+        "Company Name must be mapped."
+      );
+
+      return;
+    }
+
+    setApplyingMapping(true);
+    setError(null);
+
+    try {
+      const result =
+        await uploadCompaniesCsv(
+          uploadedFile,
+          mapping
+        );
+
+      applyImportResult(
+        result
+      );
+
+      setMapping(
+        result.applied_mapping ||
+          mapping
+      );
+
+      setMappingDirty(false);
+
+      resetIcp();
+
+    } catch {
+      setError(
+        "Could not apply this column mapping."
+      );
+
+    } finally {
+      setApplyingMapping(false);
     }
   }
 
@@ -248,15 +382,24 @@ export default function CsvUploadPanel({
       !companies.length
     ) {
       setError(
-        "Please upload a CSV first."
+        "Please import at least one account."
+      );
+
+      return;
+    }
+
+    if (
+      mappingDirty
+    ) {
+      setError(
+        "Please apply your column mapping before running the analysis."
       );
 
       return;
     }
 
 
-    const icp:
-      ICPInput =
+    const icp: ICPInput =
       useIcp
         ? {
             target_countries:
@@ -281,23 +424,15 @@ export default function CsvUploadPanel({
           }
 
         : {
-            target_countries:
-              [],
-
-            target_industries:
-              [],
-
-            min_employees:
-              null,
-
-            max_employees:
-              null,
+            target_countries: [],
+            target_industries: [],
+            min_employees: null,
+            max_employees: null,
           };
 
 
     setRunning(true);
     setError(null);
-
 
     try {
       const result =
@@ -308,12 +443,10 @@ export default function CsvUploadPanel({
           crmContexts
         );
 
-
       const detail =
         await getAnalysisRun(
           result.analysis_run_id
         );
-
 
       onAnalysisComplete(
         detail
@@ -334,16 +467,18 @@ export default function CsvUploadPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+
+      <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
         <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+
           <div>
             <h2 className="text-xl font-semibold text-slate-950">
-              Analyze your account list
+              Import and analyze accounts
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Import account data and CRM context from one CSV.
+              Map your CSV structure, preserve CRM context, and rank every account.
             </p>
           </div>
 
@@ -353,15 +488,28 @@ export default function CsvUploadPanel({
           >
             ✕
           </button>
+
         </div>
 
 
         <div className="space-y-7 p-6">
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900">
-              1. Upload accounts
-            </h3>
+
+            <div className="flex items-center justify-between">
+
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  1. Upload CSV
+                </h3>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  HubSpot, Salesforce, CRM exports, prospecting tools, or custom spreadsheets.
+                </p>
+              </div>
+
+            </div>
+
 
             <div
               onClick={() =>
@@ -369,6 +517,7 @@ export default function CsvUploadPanel({
               }
               className="mt-3 cursor-pointer rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-7 text-center transition hover:border-indigo-300 hover:bg-indigo-50/40"
             >
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -387,20 +536,57 @@ export default function CsvUploadPanel({
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
-                Company, CRM, owner, lifecycle and activity fields can be detected automatically.
+                We will automatically detect likely company and CRM columns.
               </p>
+
             </div>
+
           </section>
+
+
+          {headers.length >
+            0 && (
+            <ColumnMappingPanel
+              headers={headers}
+              mapping={mapping}
+              detectedMapping={
+                detectedMapping
+              }
+              onChange={
+                handleMappingChange
+              }
+              onApply={
+                handleApplyMapping
+              }
+              applying={
+                applyingMapping
+              }
+            />
+          )}
+
+
+          {mappingDirty && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Mapping changes are waiting to be applied.
+            </div>
+          )}
 
 
           {companies.length >
             0 && (
             <section>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
 
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Imported accounts
-                </h3>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    2. Review imported accounts
+                  </h3>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Every imported account will remain in the analysis.
+                  </p>
+                </div>
 
 
                 <div className="flex flex-wrap gap-2">
@@ -419,19 +605,21 @@ export default function CsvUploadPanel({
                       {
                         detectedCrmCount
                       }{" "}
-                      CRM records detected
+                      CRM records
                     </span>
                   )}
 
                 </div>
+
               </div>
 
 
-              <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+              <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-slate-200">
 
                 <table className="w-full text-left text-sm">
 
                   <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+
                     <tr>
                       <th className="px-4 py-3">
                         Company
@@ -446,9 +634,14 @@ export default function CsvUploadPanel({
                       </th>
 
                       <th className="px-4 py-3">
-                        CRM
+                        CRM Status
+                      </th>
+
+                      <th className="px-4 py-3">
+                        Owner
                       </th>
                     </tr>
+
                   </thead>
 
 
@@ -479,51 +672,55 @@ export default function CsvUploadPanel({
                             <tr
                               key={`${company.name}-${company.website}`}
                             >
-                              <td className="px-4 py-3 font-medium text-slate-900">
-                                {
-                                  company.name
-                                }
+
+                              <td className="px-4 py-3">
+
+                                <p className="font-medium text-slate-900">
+                                  {
+                                    company.name
+                                  }
+                                </p>
+
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {company.domain ||
+                                    "No domain"}
+                                </p>
+
                               </td>
+
 
                               <td className="px-4 py-3 text-slate-600">
                                 {company.country ||
                                   "—"}
                               </td>
 
+
                               <td className="px-4 py-3 text-slate-600">
                                 {company.industry ||
                                   "—"}
                               </td>
 
+
                               <td className="px-4 py-3">
+
                                 {crm ? (
                                   <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                                    {crm.status
-                                      .split(
-                                        "_"
-                                      )
-                                      .map(
-                                        (
-                                          word
-                                        ) =>
-                                          word
-                                            .charAt(
-                                              0
-                                            )
-                                            .toUpperCase() +
-                                          word.slice(
-                                            1
-                                          )
-                                      )
-                                      .join(
-                                        " "
-                                      )}
+                                    {formatStatus(
+                                      crm.status
+                                    )}
                                   </span>
                                 ) : (
                                   <span className="text-slate-400">
                                     —
                                   </span>
                                 )}
+
+                              </td>
+
+
+                              <td className="px-4 py-3 text-slate-600">
+                                {crm?.owner ||
+                                  "—"}
                               </td>
 
                             </tr>
@@ -532,16 +729,19 @@ export default function CsvUploadPanel({
                       )}
 
                   </tbody>
+
                 </table>
+
               </div>
 
 
               {companies.length >
                 30 && (
                 <p className="mt-2 text-xs text-slate-400">
-                  Previewing the first 30 accounts. All {companies.length} will be analyzed.
+                  Previewing the first 30 accounts. All {companies.length} accounts will be analyzed.
                 </p>
               )}
+
             </section>
           )}
 
@@ -553,11 +753,11 @@ export default function CsvUploadPanel({
             <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
 
               <p className="text-sm font-semibold text-blue-950">
-                CRM context detected
+                CRM context will influence the decision
               </p>
 
               <p className="mt-1 text-sm leading-6 text-blue-800/80">
-                The engine will use lifecycle status, recent activity, account ownership, and opportunity information when available.
+                Existing customers, opportunities, leads, recent activity, owners, and deal stages are preserved when available.
               </p>
 
             </section>
@@ -580,9 +780,7 @@ export default function CsvUploadPanel({
                     event
                   ) =>
                     setUseIcp(
-                      event
-                        .target
-                        .checked
+                      event.target.checked
                     )
                   }
                   className="mt-1 h-4 w-4"
@@ -593,13 +791,15 @@ export default function CsvUploadPanel({
                   htmlFor="use-icp"
                   className="cursor-pointer"
                 >
+
                   <p className="font-semibold text-slate-900">
-                    Use an ICP profile for prioritization
+                    3. Use an ICP profile for prioritization
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Optional. All accounts stay in the analysis. ICP only adds fit context to ranking.
+                    Optional. ICP influences scoring but never removes accounts.
                   </p>
+
                 </label>
 
               </div>
@@ -607,7 +807,7 @@ export default function CsvUploadPanel({
 
               {!useIcp && (
                 <div className="mt-4 rounded-xl bg-white/80 p-4 text-sm leading-6 text-slate-600">
-                  Without an ICP, the engine prioritizes using current signals, CRM context, and data confidence.
+                  Without ICP, ranking uses current signals, CRM context, and data confidence.
                 </div>
               )}
 
@@ -676,9 +876,11 @@ export default function CsvUploadPanel({
 
 
                   <div>
+
                     <p className="text-sm font-semibold text-slate-900">
                       Preferred company size
                     </p>
+
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
 
@@ -692,6 +894,7 @@ export default function CsvUploadPanel({
                         }
                       />
 
+
                       <NumberField
                         label="Maximum employees"
                         value={
@@ -703,6 +906,7 @@ export default function CsvUploadPanel({
                       />
 
                     </div>
+
                   </div>
 
                 </div>
@@ -724,9 +928,13 @@ export default function CsvUploadPanel({
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-5">
 
           <p className="hidden text-xs text-slate-400 sm:block">
+
             {companies.length
-              ? `${companies.length} accounts will be analyzed`
-              : "Upload a CSV to continue"}
+              ? `${companies.length} accounts ready for analysis`
+              : headers.length
+                ? "Review the mapping to import accounts"
+                : "Upload a CSV to continue"}
+
           </p>
 
 
@@ -748,22 +956,27 @@ export default function CsvUploadPanel({
               }
               disabled={
                 !companies.length ||
-                running
+                mappingDirty ||
+                running ||
+                applyingMapping
               }
               className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
+
               {running
                 ? "Analyzing..."
                 : `Analyze ${
-                    companies.length ||
-                    ""
+                    companies.length || ""
                   } Accounts`}
+
             </button>
 
           </div>
+
         </div>
 
       </div>
+
     </div>
   );
 }
@@ -780,11 +993,14 @@ function SelectionGroup({
   title: string;
   values: string[];
   selected: string[];
+
   onToggle: (
     value: string
   ) => void;
+
   onSelectAll:
     () => void;
+
   onClear:
     () => void;
 }) {
@@ -794,13 +1010,15 @@ function SelectionGroup({
       <div className="flex flex-wrap items-center justify-between gap-3">
 
         <div>
+
           <p className="text-sm font-semibold text-slate-900">
             {title}
           </p>
 
           <p className="mt-1 text-xs text-slate-500">
-            Detected automatically from the uploaded CSV.
+            Values detected from the imported accounts.
           </p>
+
         </div>
 
 
@@ -827,10 +1045,12 @@ function SelectionGroup({
           </button>
 
         </div>
+
       </div>
 
 
       {values.length ? (
+
         <div className="mt-3 flex flex-wrap gap-2">
 
           {values.map(
@@ -864,10 +1084,13 @@ function SelectionGroup({
           )}
 
         </div>
+
       ) : (
+
         <p className="mt-3 text-sm text-slate-400">
           No values detected in this CSV.
         </p>
+
       )}
 
     </div>
@@ -882,6 +1105,7 @@ function NumberField({
 }: {
   label: string;
   value: string;
+
   onChange: (
     value: string
   ) => void;

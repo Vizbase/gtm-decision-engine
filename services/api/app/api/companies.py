@@ -1,6 +1,9 @@
+import json
+
 from fastapi import (
     APIRouter,
     File,
+    Form,
     HTTPException,
     UploadFile,
 )
@@ -30,6 +33,9 @@ from services.api.app.services.company_normalizer import (
     normalize_company,
 )
 from services.api.app.services.csv_importer import (
+    ALL_FIELD_ALIASES,
+    detect_column_mapping,
+    get_csv_headers,
     import_accounts_from_csv,
 )
 from services.api.app.services.icp_scorer import (
@@ -66,6 +72,9 @@ def create_company(
 @router.post("/import")
 async def import_companies(
     file: UploadFile = File(...),
+    column_mapping: str | None = Form(
+        default=None
+    ),
 ):
     if (
         not file.filename
@@ -81,11 +90,118 @@ async def import_companies(
     content = await file.read()
 
     try:
+        headers = get_csv_headers(
+            content
+        )
+
+        detected_mapping = (
+            detect_column_mapping(
+                headers
+            )
+        )
+
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not read the CSV file."
+            ),
+        )
+
+    applied_mapping = (
+        detected_mapping
+    )
+
+    if column_mapping:
+        try:
+            parsed_mapping = (
+                json.loads(
+                    column_mapping
+                )
+            )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Column mapping must be valid JSON."
+                ),
+            )
+
+        if not isinstance(
+            parsed_mapping,
+            dict,
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Column mapping must be an object."
+                ),
+            )
+
+        valid_fields = set(
+            ALL_FIELD_ALIASES.keys()
+        )
+
+        valid_headers = set(
+            headers
+        )
+
+        cleaned_mapping = {}
+
+        for (
+            target_field,
+            source_column,
+        ) in parsed_mapping.items():
+            if (
+                target_field
+                not in valid_fields
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Unknown target field: "
+                        f"{target_field}"
+                    ),
+                )
+
+            if (
+                source_column
+                in (
+                    None,
+                    "",
+                )
+            ):
+                continue
+
+            if (
+                source_column
+                not in valid_headers
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"CSV column not found: "
+                        f"{source_column}"
+                    ),
+                )
+
+            cleaned_mapping[
+                target_field
+            ] = source_column
+
+        applied_mapping = (
+            cleaned_mapping
+        )
+
+    try:
         (
             companies,
             crm_contexts,
         ) = import_accounts_from_csv(
-            content
+            content,
+            column_mapping=(
+                applied_mapping
+            ),
         )
 
     except UnicodeDecodeError:
@@ -97,6 +213,17 @@ async def import_companies(
         )
 
     return {
+        "filename": file.filename,
+        "headers": headers,
+        "detected_mapping": (
+            detected_mapping
+        ),
+        "applied_mapping": (
+            applied_mapping
+        ),
+        "available_fields": list(
+            ALL_FIELD_ALIASES.keys()
+        ),
         "imported_count": len(
             companies
         ),
@@ -104,7 +231,9 @@ async def import_companies(
             crm_contexts
         ),
         "companies": companies,
-        "crm_contexts": crm_contexts,
+        "crm_contexts": (
+            crm_contexts
+        ),
     }
 
 

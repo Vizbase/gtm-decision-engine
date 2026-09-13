@@ -102,6 +102,12 @@ CRM_COLUMN_ALIASES = {
 }
 
 
+ALL_FIELD_ALIASES = {
+    **COMPANY_COLUMN_ALIASES,
+    **CRM_COLUMN_ALIASES,
+}
+
+
 def normalize_header(value: str) -> str:
     value = value.strip().lower()
 
@@ -114,38 +120,118 @@ def normalize_header(value: str) -> str:
     return value.strip("_")
 
 
-def normalize_row(row: dict) -> dict:
+def get_csv_headers(
+    content: bytes,
+) -> list[str]:
+    text = content.decode(
+        "utf-8-sig"
+    )
+
+    reader = csv.DictReader(
+        io.StringIO(text)
+    )
+
+    return [
+        header
+        for header in (
+            reader.fieldnames or []
+        )
+        if header
+    ]
+
+
+def detect_column_mapping(
+    headers: list[str],
+) -> dict[str, str]:
+    normalized_headers = {
+        normalize_header(header):
+            header
+        for header in headers
+    }
+
+    mapping = {}
+
+    for field, aliases in (
+        ALL_FIELD_ALIASES.items()
+    ):
+        for alias in aliases:
+            normalized_alias = (
+                normalize_header(alias)
+            )
+
+            if (
+                normalized_alias
+                in normalized_headers
+            ):
+                mapping[field] = (
+                    normalized_headers[
+                        normalized_alias
+                    ]
+                )
+
+                break
+
+    return mapping
+
+
+def normalize_row(
+    row: dict,
+) -> dict:
     normalized = {}
 
     for key, value in row.items():
         if key is None:
             continue
 
-        normalized_key = normalize_header(key)
+        normalized_key = (
+            normalize_header(key)
+        )
 
-        if isinstance(value, str):
+        if isinstance(
+            value,
+            str,
+        ):
             value = value.strip()
 
-        normalized[normalized_key] = value
+        normalized[
+            normalized_key
+        ] = value
 
     return normalized
 
 
-def get_value(
+def get_mapped_value(
     row: dict,
     field: str,
-    aliases: dict[str, list[str]],
+    mapping: dict[
+        str,
+        str
+    ],
 ):
-    for alias in aliases[field]:
-        value = row.get(alias)
+    source_column = (
+        mapping.get(field)
+    )
 
-        if value not in (
-            None,
-            "",
-        ):
-            return value
+    if not source_column:
+        return None
 
-    return None
+    normalized_source = (
+        normalize_header(
+            source_column
+        )
+    )
+
+    value = row.get(
+        normalized_source
+    )
+
+    if value in (
+        None,
+        "",
+    ):
+        return None
+
+    return value
 
 
 def parse_employee_count(
@@ -164,7 +250,9 @@ def parse_employee_count(
     )
 
     try:
-        return int(float(cleaned))
+        return int(
+            float(cleaned)
+        )
     except ValueError:
         return None
 
@@ -175,7 +263,9 @@ def parse_date(
     if not value:
         return None
 
-    text = str(value).strip()
+    text = str(
+        value
+    ).strip()
 
     try:
         return datetime.fromisoformat(
@@ -209,11 +299,17 @@ def parse_date(
 
 def parse_days_since_contact(
     row: dict,
+    mapping: dict[
+        str,
+        str
+    ],
 ) -> int | None:
-    direct_value = get_value(
-        row,
-        "days_since_last_contact",
-        CRM_COLUMN_ALIASES,
+    direct_value = (
+        get_mapped_value(
+            row,
+            "days_since_last_contact",
+            mapping,
+        )
     )
 
     if direct_value not in (
@@ -222,20 +318,28 @@ def parse_days_since_contact(
     ):
         try:
             return max(
-                int(float(direct_value)),
+                int(
+                    float(
+                        direct_value
+                    )
+                ),
                 0,
             )
         except ValueError:
             pass
 
-    activity_value = get_value(
-        row,
-        "last_activity_date",
-        CRM_COLUMN_ALIASES,
+    activity_value = (
+        get_mapped_value(
+            row,
+            "last_activity_date",
+            mapping,
+        )
     )
 
-    activity_date = parse_date(
-        activity_value
+    activity_date = (
+        parse_date(
+            activity_value
+        )
     )
 
     if activity_date is None:
@@ -254,10 +358,14 @@ def lifecycle_to_status(
     value,
 ) -> CRMStatus:
     if not value:
-        return CRMStatus.NEW_PROSPECT
+        return (
+            CRMStatus.NEW_PROSPECT
+        )
 
-    normalized = normalize_header(
-        str(value)
+    normalized = (
+        normalize_header(
+            str(value)
+        )
     )
 
     if normalized in {
@@ -266,13 +374,17 @@ def lifecycle_to_status(
         "client",
         "evangelist",
     }:
-        return CRMStatus.EXISTING_CUSTOMER
+        return (
+            CRMStatus.EXISTING_CUSTOMER
+        )
 
     if normalized in {
         "opportunity",
         "open_opportunity",
     }:
-        return CRMStatus.OPEN_OPPORTUNITY
+        return (
+            CRMStatus.OPEN_OPPORTUNITY
+        )
 
     if normalized in {
         "lead",
@@ -282,15 +394,21 @@ def lifecycle_to_status(
         "marketing_qualified_lead",
         "sales_qualified_lead",
     }:
-        return CRMStatus.EXISTING_LEAD
+        return (
+            CRMStatus.EXISTING_LEAD
+        )
 
     if normalized in {
         "recently_contacted",
         "contacted",
     }:
-        return CRMStatus.RECENTLY_CONTACTED
+        return (
+            CRMStatus.RECENTLY_CONTACTED
+        )
 
-    return CRMStatus.NEW_PROSPECT
+    return (
+        CRMStatus.NEW_PROSPECT
+    )
 
 
 def deal_stage_status(
@@ -299,15 +417,19 @@ def deal_stage_status(
     if not value:
         return None
 
-    normalized = normalize_header(
-        str(value)
+    normalized = (
+        normalize_header(
+            str(value)
+        )
     )
 
     if normalized in {
         "closed_won",
         "won",
     }:
-        return CRMStatus.EXISTING_CUSTOMER
+        return (
+            CRMStatus.EXISTING_CUSTOMER
+        )
 
     if normalized in {
         "closed_lost",
@@ -316,38 +438,55 @@ def deal_stage_status(
     }:
         return None
 
-    return CRMStatus.OPEN_OPPORTUNITY
+    return (
+        CRMStatus.OPEN_OPPORTUNITY
+    )
 
 
 def build_crm_context(
     row: dict,
+    mapping: dict[
+        str,
+        str
+    ],
 ) -> CRMContext | None:
-    lifecycle = get_value(
-        row,
-        "lifecycle_stage",
-        CRM_COLUMN_ALIASES,
+    lifecycle = (
+        get_mapped_value(
+            row,
+            "lifecycle_stage",
+            mapping,
+        )
     )
 
-    owner = get_value(
-        row,
-        "owner",
-        CRM_COLUMN_ALIASES,
+    owner = (
+        get_mapped_value(
+            row,
+            "owner",
+            mapping,
+        )
     )
 
-    opportunity_stage = get_value(
-        row,
-        "opportunity_stage",
-        CRM_COLUMN_ALIASES,
+    opportunity_stage = (
+        get_mapped_value(
+            row,
+            "opportunity_stage",
+            mapping,
+        )
     )
 
-    source = get_value(
-        row,
-        "source",
-        CRM_COLUMN_ALIASES,
+    source = (
+        get_mapped_value(
+            row,
+            "source",
+            mapping,
+        )
     )
 
     days_since_last_contact = (
-        parse_days_since_contact(row)
+        parse_days_since_contact(
+            row,
+            mapping,
+        )
     )
 
     has_crm_data = any(
@@ -366,8 +505,10 @@ def build_crm_context(
     if not has_crm_data:
         return None
 
-    status = lifecycle_to_status(
-        lifecycle
+    status = (
+        lifecycle_to_status(
+            lifecycle
+        )
     )
 
     opportunity_status = (
@@ -376,11 +517,14 @@ def build_crm_context(
         )
     )
 
-    if opportunity_status is not None:
-        status = opportunity_status
+    if (
+        opportunity_status
+        is not None
+    ):
+        status = (
+            opportunity_status
+        )
 
-    # CRM hierarchy:
-    # open opportunity / customer > recent contact > lead > prospect.
     if (
         status
         not in {
@@ -389,9 +533,12 @@ def build_crm_context(
         }
         and days_since_last_contact
         is not None
-        and days_since_last_contact <= 7
+        and days_since_last_contact
+        <= 7
     ):
-        status = CRMStatus.RECENTLY_CONTACTED
+        status = (
+            CRMStatus.RECENTLY_CONTACTED
+        )
 
     return CRMContext(
         status=status,
@@ -401,7 +548,9 @@ def build_crm_context(
             else None
         ),
         opportunity_stage=(
-            str(opportunity_stage)
+            str(
+                opportunity_stage
+            )
             if opportunity_stage
             else None
         ),
@@ -417,23 +566,55 @@ def build_crm_context(
 
 
 def company_context_key(
-    company: CompanyNormalized,
+    company:
+        CompanyNormalized,
 ) -> str:
     if company.domain:
-        return company.domain.lower()
+        return (
+            company.domain.lower()
+        )
 
     if company.website:
-        return company.website.lower()
+        return (
+            company.website.lower()
+        )
 
-    return company.name.strip().lower()
+    return (
+        company.name
+        .strip()
+        .lower()
+    )
 
 
 def import_accounts_from_csv(
     content: bytes,
+    column_mapping: dict[
+        str,
+        str
+    ]
+    | None = None,
 ) -> tuple[
-    list[CompanyNormalized],
-    dict[str, CRMContext],
+    list[
+        CompanyNormalized
+    ],
+    dict[
+        str,
+        CRMContext
+    ],
 ]:
+    headers = (
+        get_csv_headers(
+            content
+        )
+    )
+
+    mapping = (
+        column_mapping
+        or detect_column_mapping(
+            headers
+        )
+    )
+
     text = content.decode(
         "utf-8-sig"
     )
@@ -442,24 +623,21 @@ def import_accounts_from_csv(
         io.StringIO(text)
     )
 
-    companies: list[
-        CompanyNormalized
-    ] = []
+    companies = []
 
-    crm_contexts: dict[
-        str,
-        CRMContext
-    ] = {}
+    crm_contexts = {}
 
     for raw_row in reader:
         row = normalize_row(
             raw_row
         )
 
-        name = get_value(
-            row,
-            "name",
-            COMPANY_COLUMN_ALIASES,
+        name = (
+            get_mapped_value(
+                row,
+                "name",
+                mapping,
+            )
         )
 
         if not name:
@@ -467,34 +645,47 @@ def import_accounts_from_csv(
 
         company = CompanyInput(
             name=str(name),
-            website=get_value(
-                row,
-                "website",
-                COMPANY_COLUMN_ALIASES,
+
+            website=(
+                get_mapped_value(
+                    row,
+                    "website",
+                    mapping,
+                )
             ),
-            country=get_value(
-                row,
-                "country",
-                COMPANY_COLUMN_ALIASES,
+
+            country=(
+                get_mapped_value(
+                    row,
+                    "country",
+                    mapping,
+                )
             ),
-            industry=get_value(
-                row,
-                "industry",
-                COMPANY_COLUMN_ALIASES,
+
+            industry=(
+                get_mapped_value(
+                    row,
+                    "industry",
+                    mapping,
+                )
             ),
+
             employee_count=(
                 parse_employee_count(
-                    get_value(
+                    get_mapped_value(
                         row,
                         "employee_count",
-                        COMPANY_COLUMN_ALIASES,
+                        mapping,
                     )
                 )
             ),
-            linkedin_url=get_value(
-                row,
-                "linkedin_url",
-                COMPANY_COLUMN_ALIASES,
+
+            linkedin_url=(
+                get_mapped_value(
+                    row,
+                    "linkedin_url",
+                    mapping,
+                )
             ),
         )
 
@@ -510,7 +701,8 @@ def import_accounts_from_csv(
 
         crm_context = (
             build_crm_context(
-                row
+                row,
+                mapping,
             )
         )
 
@@ -527,11 +719,11 @@ def import_accounts_from_csv(
     )
 
 
-# Keep the original function available
-# for existing callers/tests.
 def import_companies_from_csv(
     content: bytes,
-) -> list[CompanyNormalized]:
+) -> list[
+    CompanyNormalized
+]:
     companies, _ = (
         import_accounts_from_csv(
             content

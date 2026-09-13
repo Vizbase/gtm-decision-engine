@@ -29,6 +29,9 @@ export type CRMContext = {
 };
 
 
+export type ColumnMapping = Record<string, string>;
+
+
 export type AnalysisRunSummary = {
   id: string;
   workspace_name: string;
@@ -92,8 +95,15 @@ export type ICPInput = {
 
 
 export type CsvImportResponse = {
+  filename: string;
+  headers: string[];
+  detected_mapping: ColumnMapping;
+  applied_mapping: ColumnMapping;
+  available_fields: string[];
+
   imported_count: number;
   detected_crm_count: number;
+
   companies: Company[];
   crm_contexts: Record<string, CRMContext>;
 };
@@ -135,7 +145,8 @@ export async function getAnalysisRun(
 
 
 export async function uploadCompaniesCsv(
-  file: File
+  file: File,
+  mapping?: ColumnMapping
 ): Promise<CsvImportResponse> {
   const formData = new FormData();
 
@@ -143,6 +154,13 @@ export async function uploadCompaniesCsv(
     "file",
     file
   );
+
+  if (mapping) {
+    formData.append(
+      "column_mapping",
+      JSON.stringify(mapping)
+    );
+  }
 
   const response = await fetch(
     `${API_URL}/companies/import`,
