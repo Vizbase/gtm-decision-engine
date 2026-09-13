@@ -1,8 +1,20 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
 
-from services.api.app.api.analysis import router as analysis_router
-from services.api.app.api.companies import router as companies_router
+from services.api.app.api.analysis import (
+    router as analysis_router,
+)
+from services.api.app.api.companies import (
+    router as companies_router,
+)
+from services.api.app.core.config import (
+    get_settings,
+)
+
+
+settings = get_settings()
 
 
 app = FastAPI(
@@ -17,12 +29,16 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=[
+        "GET",
+        "POST",
+        "OPTIONS",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=[
+        "Content-Type",
+    ],
 )
 
 
@@ -42,4 +58,5 @@ def root():
 def health():
     return {
         "status": "ok",
+        "environment": settings.app_env,
     }

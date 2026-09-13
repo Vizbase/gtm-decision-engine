@@ -43,6 +43,12 @@ from services.api.app.services.icp_scorer import (
     score_company,
 )
 
+from services.api.app.core.config import get_settings
+
+settings = get_settings()
+MAX_CSV_UPLOAD_BYTES = settings.max_csv_upload_bytes
+MAX_ANALYSIS_ACCOUNTS = settings.max_analysis_accounts
+
 
 router = APIRouter(
     prefix="/companies",
@@ -88,6 +94,16 @@ async def import_companies(
         )
 
     content = await file.read()
+
+    if len(content) > MAX_CSV_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "CSV file is too large. "
+                f"Maximum upload size is "
+                f"{MAX_CSV_UPLOAD_BYTES // (1024 * 1024)} MB."
+            ),
+        )
 
     try:
         headers = get_csv_headers(
@@ -203,6 +219,28 @@ async def import_companies(
                 applied_mapping
             ),
         )
+
+        if not companies:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The CSV did not contain "
+                    "any usable accounts."
+                ),
+            )
+
+        if (
+            len(companies)
+            > MAX_ANALYSIS_ACCOUNTS
+        ):
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "This public demo supports up to "
+                    f"{MAX_ANALYSIS_ACCOUNTS} "
+                    "accounts per CSV."
+                ),
+            )
 
     except UnicodeDecodeError:
         raise HTTPException(

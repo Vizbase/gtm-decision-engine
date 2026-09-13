@@ -1,9 +1,9 @@
-import os
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from services.api.app.core.config import get_settings
 from services.api.app.core.database import get_db
 from services.api.app.integrations.crm.demo_provider import (
     DemoCRMProvider,
@@ -44,13 +44,21 @@ router = APIRouter(
 )
 
 
+settings = get_settings()
+
 PUBLIC_PORTFOLIO_MODE = (
-    os.getenv(
-        "PUBLIC_PORTFOLIO_MODE",
-        "false",
-    ).lower()
-    in {"1", "true", "yes", "on"}
+    settings.public_portfolio_mode
 )
+
+MAX_ANALYSIS_ACCOUNTS = (
+    settings.max_analysis_accounts
+)
+
+ALLOWED_SAMPLE_DATASETS = {
+    "gtm",
+    "hubspot",
+    "salesforce",
+}
 
 
 live_analysis_pipeline = AnalysisPipeline(
@@ -149,6 +157,39 @@ async def run_analysis(
     request: AnalysisRequest,
     db: Session = Depends(get_db),
 ):
+    if not request.companies:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "At least one account is required."
+            ),
+        )
+
+    if (
+        len(request.companies)
+        > MAX_ANALYSIS_ACCOUNTS
+    ):
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "This public demo supports up to "
+                f"{MAX_ANALYSIS_ACCOUNTS} "
+                "accounts per analysis."
+            ),
+        )
+
+    if (
+        request.enrichment_mode == "sample"
+        and request.sample_dataset_id
+        not in ALLOWED_SAMPLE_DATASETS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unknown sample dataset."
+            ),
+        )
+
     pipeline = live_analysis_pipeline
 
     if request.enrichment_mode == "sample":
@@ -213,6 +254,13 @@ async def run_demo_analysis(
         use_website_enrichment=True,
     )
 
+    if PUBLIC_PORTFOLIO_MODE:
+        return AnalysisResponse(
+            analysis_run_id=None,
+            total_companies=len(results),
+            results=results,
+        )
+
     repository = AnalysisRepository(db)
 
     analysis_run = repository.save_analysis(
@@ -240,6 +288,12 @@ def list_analysis_runs(
     ),
     db: Session = Depends(get_db),
 ):
+    if PUBLIC_PORTFOLIO_MODE:
+        return AnalysisRunListResponse(
+            total_runs=0,
+            runs=[],
+        )
+
     repository = AnalysisRepository(db)
 
     rows = repository.list_analysis_runs(
@@ -270,6 +324,15 @@ def get_analysis_run(
     run_id: UUID,
     db: Session = Depends(get_db),
 ):
+    if PUBLIC_PORTFOLIO_MODE:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Analysis history is disabled "
+                "in public portfolio mode."
+            ),
+        )
+
     repository = AnalysisRepository(db)
 
     stored = repository.get_analysis_run(

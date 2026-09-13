@@ -1,0 +1,709 @@
+--- MAIN ---
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from services.api.app.api.analysis import router as analysis_router
+from services.api.app.api.companies import router as companies_router
+
+
+app = FastAPI(
+    title="GTM Decision Engine API",
+    version="0.1.0",
+    description=(
+        "Account enrichment, ICP scoring, CRM context, "
+        "prioritization, and GTM decision recommendations."
+    ),
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app.include_router(companies_router)
+app.include_router(analysis_router)
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "GTM Decision Engine",
+        "status": "running",
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+    }
+
+--- COMPANY IMPORT API ---
+services/api/app/api/analysis.py-124-    ),
+services/api/app/api/analysis.py-125-    CompanyInput(
+services/api/app/api/analysis.py-126-        name="BluePeak SaaS",
+services/api/app/api/analysis.py-127-        website="https://bluepeak.example",
+services/api/app/api/analysis.py-128-        country="France",
+services/api/app/api/analysis.py-129-        industry="SaaS",
+services/api/app/api/analysis.py-130-        employee_count=240,
+services/api/app/api/analysis.py-131-        linkedin_url=None,
+services/api/app/api/analysis.py-132-    ),
+services/api/app/api/analysis.py-133-    CompanyInput(
+services/api/app/api/analysis.py-134-        name="Legacy Manufacturing Group",
+services/api/app/api/analysis.py-135-        website="https://legacy.example",
+services/api/app/api/analysis.py-136-        country="Spain",
+services/api/app/api/analysis.py-137-        industry="Manufacturing",
+services/api/app/api/analysis.py-138-        employee_count=25000,
+services/api/app/api/analysis.py-139-        linkedin_url=None,
+services/api/app/api/analysis.py-140-    ),
+services/api/app/api/analysis.py-141-]
+services/api/app/api/analysis.py-142-
+services/api/app/api/analysis.py-143-
+services/api/app/api/analysis.py:144:@router.post(
+services/api/app/api/analysis.py-145-    "/run",
+services/api/app/api/analysis.py-146-    response_model=AnalysisResponse,
+services/api/app/api/analysis.py-147-)
+services/api/app/api/analysis.py-148-async def run_analysis(
+services/api/app/api/analysis.py-149-    request: AnalysisRequest,
+services/api/app/api/analysis.py-150-    db: Session = Depends(get_db),
+services/api/app/api/analysis.py-151-):
+services/api/app/api/analysis.py-152-    pipeline = live_analysis_pipeline
+services/api/app/api/analysis.py-153-
+services/api/app/api/analysis.py-154-    if request.enrichment_mode == "sample":
+services/api/app/api/analysis.py-155-        pipeline = AnalysisPipeline(
+services/api/app/api/analysis.py-156-            crm_provider=DemoCRMProvider(),
+services/api/app/api/analysis.py-157-            enrichment_provider=(
+services/api/app/api/analysis.py-158-                SampleSignalEnrichmentProvider(
+services/api/app/api/analysis.py-159-                    dataset_id=(
+services/api/app/api/analysis.py-160-                        request.sample_dataset_id
+services/api/app/api/analysis.py-161-                        or "sample"
+services/api/app/api/analysis.py-162-                    )
+services/api/app/api/analysis.py-163-                )
+services/api/app/api/analysis.py-164-            ),
+services/api/app/api/analysis.py-165-        )
+services/api/app/api/analysis.py-166-
+services/api/app/api/analysis.py-167-    results = await pipeline.run(
+services/api/app/api/analysis.py-168-        companies=request.companies,
+services/api/app/api/analysis.py-169-        icp=request.icp,
+services/api/app/api/analysis.py-170-        use_website_enrichment=(
+services/api/app/api/analysis.py-171-            request.use_website_enrichment
+services/api/app/api/analysis.py-172-        ),
+services/api/app/api/analysis.py-173-        crm_contexts=request.crm_contexts,
+services/api/app/api/analysis.py-174-    )
+services/api/app/api/analysis.py-175-
+services/api/app/api/analysis.py-176-    should_persist = (
+services/api/app/api/analysis.py-177-        request.persist
+services/api/app/api/analysis.py-178-        and not PUBLIC_PORTFOLIO_MODE
+services/api/app/api/analysis.py-179-    )
+services/api/app/api/analysis.py-180-
+services/api/app/api/analysis.py-181-    if not should_persist:
+services/api/app/api/analysis.py-182-        return AnalysisResponse(
+services/api/app/api/analysis.py-183-            analysis_run_id=None,
+services/api/app/api/analysis.py-184-            total_companies=len(results),
+services/api/app/api/analysis.py-185-            results=results,
+services/api/app/api/analysis.py-186-        )
+services/api/app/api/analysis.py-187-
+services/api/app/api/analysis.py-188-    repository = AnalysisRepository(db)
+services/api/app/api/analysis.py-189-
+services/api/app/api/analysis.py-190-    analysis_run = repository.save_analysis(
+services/api/app/api/analysis.py-191-        workspace_name=request.workspace_name,
+services/api/app/api/analysis.py-192-        icp=request.icp,
+services/api/app/api/analysis.py-193-        results=results,
+services/api/app/api/analysis.py-194-    )
+services/api/app/api/analysis.py-195-
+services/api/app/api/analysis.py-196-    return AnalysisResponse(
+services/api/app/api/analysis.py-197-        analysis_run_id=analysis_run.id,
+services/api/app/api/analysis.py-198-        total_companies=len(results),
+services/api/app/api/analysis.py-199-        results=results,
+services/api/app/api/analysis.py-200-    )
+services/api/app/api/analysis.py-201-
+services/api/app/api/analysis.py-202-
+services/api/app/api/analysis.py:203:@router.post(
+services/api/app/api/analysis.py-204-    "/demo",
+services/api/app/api/analysis.py-205-    response_model=AnalysisResponse,
+services/api/app/api/analysis.py-206-)
+services/api/app/api/analysis.py-207-async def run_demo_analysis(
+services/api/app/api/analysis.py-208-    db: Session = Depends(get_db),
+services/api/app/api/analysis.py-209-):
+services/api/app/api/analysis.py-210-    results = await demo_analysis_pipeline.run(
+services/api/app/api/analysis.py-211-        companies=DEMO_COMPANIES,
+services/api/app/api/analysis.py-212-        icp=DEMO_ICP,
+services/api/app/api/analysis.py-213-        use_website_enrichment=True,
+services/api/app/api/analysis.py-214-    )
+services/api/app/api/analysis.py-215-
+services/api/app/api/analysis.py-216-    repository = AnalysisRepository(db)
+services/api/app/api/analysis.py-217-
+services/api/app/api/analysis.py-218-    analysis_run = repository.save_analysis(
+services/api/app/api/analysis.py-219-        workspace_name="Demo Workspace",
+services/api/app/api/analysis.py-220-        icp=DEMO_ICP,
+services/api/app/api/analysis.py-221-        results=results,
+services/api/app/api/analysis.py-222-    )
+services/api/app/api/analysis.py-223-
+services/api/app/api/analysis.py-224-    return AnalysisResponse(
+services/api/app/api/analysis.py-225-        analysis_run_id=analysis_run.id,
+services/api/app/api/analysis.py-226-        total_companies=len(results),
+services/api/app/api/analysis.py-227-        results=results,
+services/api/app/api/analysis.py-228-    )
+services/api/app/api/analysis.py-229-
+services/api/app/api/analysis.py-230-
+services/api/app/api/analysis.py-231-@router.get(
+services/api/app/api/analysis.py-232-    "/runs",
+services/api/app/api/analysis.py-233-    response_model=AnalysisRunListResponse,
+services/api/app/api/analysis.py-234-)
+services/api/app/api/analysis.py-235-def list_analysis_runs(
+services/api/app/api/analysis.py-236-    limit: int = Query(
+services/api/app/api/analysis.py-237-        default=20,
+services/api/app/api/analysis.py-238-        ge=1,
+services/api/app/api/analysis.py-239-        le=100,
+services/api/app/api/analysis.py-240-    ),
+services/api/app/api/analysis.py-241-    db: Session = Depends(get_db),
+services/api/app/api/analysis.py-242-):
+services/api/app/api/analysis.py-243-    repository = AnalysisRepository(db)
+services/api/app/api/analysis.py-244-
+services/api/app/api/analysis.py-245-    rows = repository.list_analysis_runs(
+services/api/app/api/analysis.py-246-        limit=limit
+services/api/app/api/analysis.py-247-    )
+services/api/app/api/analysis.py-248-
+services/api/app/api/analysis.py-249-    runs = [
+services/api/app/api/analysis.py-250-        AnalysisRunSummary(
+services/api/app/api/analysis.py-251-            id=analysis_run.id,
+services/api/app/api/analysis.py-252-            workspace_name=workspace_name,
+services/api/app/api/analysis.py-253-            total_companies=total_companies,
+services/api/app/api/analysis.py-254-            created_at=analysis_run.created_at,
+services/api/app/api/analysis.py-255-        )
+services/api/app/api/analysis.py-256-        for analysis_run, workspace_name, total_companies in rows
+services/api/app/api/analysis.py-257-    ]
+services/api/app/api/analysis.py-258-
+services/api/app/api/analysis.py-259-    return AnalysisRunListResponse(
+services/api/app/api/analysis.py-260-        total_runs=len(runs),
+services/api/app/api/analysis.py-261-        runs=runs,
+services/api/app/api/analysis.py-262-    )
+services/api/app/api/analysis.py-263-
+services/api/app/api/analysis.py-264-
+services/api/app/api/analysis.py-265-@router.get(
+services/api/app/api/analysis.py-266-    "/runs/{run_id}",
+services/api/app/api/analysis.py-267-    response_model=AnalysisRunDetail,
+services/api/app/api/analysis.py-268-)
+services/api/app/api/analysis.py-269-def get_analysis_run(
+services/api/app/api/analysis.py-270-    run_id: UUID,
+services/api/app/api/analysis.py-271-    db: Session = Depends(get_db),
+services/api/app/api/analysis.py-272-):
+services/api/app/api/analysis.py-273-    repository = AnalysisRepository(db)
+services/api/app/api/analysis.py-274-
+services/api/app/api/analysis.py-275-    stored = repository.get_analysis_run(
+services/api/app/api/analysis.py-276-        run_id=run_id
+services/api/app/api/analysis.py-277-    )
+services/api/app/api/analysis.py-278-
+services/api/app/api/analysis.py-279-    if not stored:
+services/api/app/api/analysis.py-280-        raise HTTPException(
+services/api/app/api/analysis.py-281-            status_code=404,
+services/api/app/api/analysis.py-282-            detail="Analysis run not found.",
+services/api/app/api/analysis.py-283-        )
+services/api/app/api/analysis.py-284-
+services/api/app/api/analysis.py-285-    run_row, result_rows = stored
+services/api/app/api/analysis.py-286-
+services/api/app/api/analysis.py-287-    analysis_run, workspace_name = run_row
+services/api/app/api/analysis.py-288-
+services/api/app/api/analysis.py-289-    results = []
+services/api/app/api/analysis.py-290-
+services/api/app/api/analysis.py-291-    for result, company in result_rows:
+services/api/app/api/analysis.py-292-        details = result.details or {}
+services/api/app/api/analysis.py-293-
+services/api/app/api/analysis.py-294-        results.append(
+services/api/app/api/analysis.py-295-            StoredAnalysisResult(
+services/api/app/api/analysis.py-296-                company=CompanyNormalized(
+services/api/app/api/analysis.py-297-                    name=company.name,
+services/api/app/api/analysis.py-298-                    domain=company.domain,
+services/api/app/api/analysis.py-299-                    website=company.website,
+services/api/app/api/analysis.py-300-                    country=company.country,
+services/api/app/api/analysis.py-301-                    industry=company.industry,
+services/api/app/api/analysis.py-302-                    employee_count=company.employee_count,
+services/api/app/api/analysis.py-303-                    linkedin_url=company.linkedin_url,
+services/api/app/api/analysis.py-304-                ),
+services/api/app/api/analysis.py-305-                rank=result.rank,
+services/api/app/api/analysis.py-306-                icp_score=result.icp_score,
+services/api/app/api/analysis.py-307-                signal_score=result.signal_score,
+services/api/app/api/analysis.py-308-                priority_score=result.priority_score,
+services/api/app/api/analysis.py-309-                data_confidence=result.data_confidence,
+services/api/app/api/analysis.py-310-                fit_level=details.get(
+services/api/app/api/analysis.py-311-                    "fit_level",
+services/api/app/api/analysis.py-312-                    "unknown",
+services/api/app/api/analysis.py-313-                ),
+services/api/app/api/analysis.py-314-                signal_level=details.get(
+services/api/app/api/analysis.py-315-                    "signal_level",
+services/api/app/api/analysis.py-316-                    "unknown",
+services/api/app/api/analysis.py-317-                ),
+services/api/app/api/analysis.py-318-                priority_level=details.get(
+services/api/app/api/analysis.py-319-                    "priority_level",
+services/api/app/api/analysis.py-320-                    "unknown",
+services/api/app/api/analysis.py-321-                ),
+services/api/app/api/analysis.py-322-                confidence_level=details.get(
+services/api/app/api/analysis.py-323-                    "confidence_level",
+services/api/app/api/analysis.py-324-                    "unknown",
+services/api/app/api/analysis.py-325-                ),
+services/api/app/api/analysis.py-326-                crm_status=result.crm_status,
+services/api/app/api/analysis.py-327-                crm_source=details.get(
+services/api/app/api/analysis.py-328-                    "crm_source",
+services/api/app/api/analysis.py-329-                    "unknown",
+services/api/app/api/analysis.py-330-                ),
+services/api/app/api/analysis.py-331-                potential_duplicate=details.get(
+services/api/app/api/analysis.py-332-                    "potential_duplicate",
+services/api/app/api/analysis.py-333-                    False,
+services/api/app/api/analysis.py-334-                ),
+services/api/app/api/analysis.py-335-                duplicate_group_size=details.get(
+services/api/app/api/analysis.py-336-                    "duplicate_group_size",
+services/api/app/api/analysis.py-337-                    1,
+services/api/app/api/analysis.py-338-                ),
+services/api/app/api/analysis.py-339-                duplicate_account_names=details.get(
+services/api/app/api/analysis.py-340-                    "duplicate_account_names",
+services/api/app/api/analysis.py-341-                    [],
+services/api/app/api/analysis.py-342-                ),
+services/api/app/api/analysis.py-343-                recommended_action=(
+services/api/app/api/analysis.py-344-                    result.recommended_action
+services/api/app/api/analysis.py-345-                ),
+services/api/app/api/analysis.py-346-                action_reason=result.action_reason,
+services/api/app/api/analysis.py-347-                reasons=details.get(
+services/api/app/api/analysis.py-348-                    "reasons",
+services/api/app/api/analysis.py-349-                    [],
+services/api/app/api/analysis.py-350-                ),
+services/api/app/api/analysis.py-351-                signal_reasons=details.get(
+services/api/app/api/analysis.py-352-                    "signal_reasons",
+services/api/app/api/analysis.py-353-                    [],
+services/api/app/api/analysis.py-354-                ),
+services/api/app/api/analysis.py-355-                confidence_reasons=details.get(
+services/api/app/api/analysis.py-356-                    "confidence_reasons",
+services/api/app/api/analysis.py-357-                    [],
+services/api/app/api/analysis.py-358-                ),
+services/api/app/api/analysis.py-359-                enrichment=result.enrichment or {},
+services/api/app/api/analysis.py-360-            )
+services/api/app/api/analysis.py-361-        )
+services/api/app/api/analysis.py-362-
+services/api/app/api/analysis.py-363-    return AnalysisRunDetail(
+services/api/app/api/analysis.py-364-        id=analysis_run.id,
+services/api/app/api/analysis.py-365-        workspace_name=workspace_name,
+services/api/app/api/analysis.py-366-        created_at=analysis_run.created_at,
+services/api/app/api/analysis.py-367-        icp=analysis_run.icp_config,
+services/api/app/api/analysis.py-368-        total_companies=len(results),
+services/api/app/api/analysis.py-369-        results=results,
+services/api/app/api/analysis.py-370-    )
+--
+services/api/app/api/companies.py-40-)
+services/api/app/api/companies.py-41-from services.api.app.services.icp_scorer import (
+services/api/app/api/companies.py-42-    score_and_rank_companies,
+services/api/app/api/companies.py-43-    score_company,
+services/api/app/api/companies.py-44-)
+services/api/app/api/companies.py-45-
+services/api/app/api/companies.py-46-
+services/api/app/api/companies.py-47-router = APIRouter(
+services/api/app/api/companies.py-48-    prefix="/companies",
+services/api/app/api/companies.py-49-    tags=["Companies"],
+services/api/app/api/companies.py-50-)
+services/api/app/api/companies.py-51-
+services/api/app/api/companies.py-52-
+services/api/app/api/companies.py-53-crm_provider = DemoCRMProvider()
+services/api/app/api/companies.py-54-
+services/api/app/api/companies.py-55-website_enrichment_provider = (
+services/api/app/api/companies.py-56-    WebsiteEnrichmentProvider()
+services/api/app/api/companies.py-57-)
+services/api/app/api/companies.py-58-
+services/api/app/api/companies.py-59-
+services/api/app/api/companies.py:60:@router.post(
+services/api/app/api/companies.py-61-    "/",
+services/api/app/api/companies.py-62-    response_model=CompanyNormalized,
+services/api/app/api/companies.py-63-)
+services/api/app/api/companies.py-64-def create_company(
+services/api/app/api/companies.py-65-    company: CompanyInput,
+services/api/app/api/companies.py-66-):
+services/api/app/api/companies.py-67-    return normalize_company(
+services/api/app/api/companies.py-68-        company
+services/api/app/api/companies.py-69-    )
+services/api/app/api/companies.py-70-
+services/api/app/api/companies.py-71-
+services/api/app/api/companies.py:72:@router.post("/import")
+services/api/app/api/companies.py-73-async def import_companies(
+services/api/app/api/companies.py-74-    file: UploadFile = File(...),
+services/api/app/api/companies.py-75-    column_mapping: str | None = Form(
+services/api/app/api/companies.py-76-        default=None
+services/api/app/api/companies.py-77-    ),
+services/api/app/api/companies.py-78-):
+services/api/app/api/companies.py-79-    if (
+services/api/app/api/companies.py-80-        not file.filename
+services/api/app/api/companies.py-81-        or not file.filename.lower().endswith(
+services/api/app/api/companies.py-82-            ".csv"
+services/api/app/api/companies.py-83-        )
+services/api/app/api/companies.py-84-    ):
+services/api/app/api/companies.py-85-        raise HTTPException(
+services/api/app/api/companies.py-86-            status_code=400,
+services/api/app/api/companies.py-87-            detail="Please upload a CSV file.",
+services/api/app/api/companies.py-88-        )
+services/api/app/api/companies.py-89-
+services/api/app/api/companies.py-90-    content = await file.read()
+services/api/app/api/companies.py-91-
+services/api/app/api/companies.py-92-    try:
+services/api/app/api/companies.py-93-        headers = get_csv_headers(
+services/api/app/api/companies.py-94-            content
+services/api/app/api/companies.py-95-        )
+services/api/app/api/companies.py-96-
+services/api/app/api/companies.py-97-        detected_mapping = (
+services/api/app/api/companies.py-98-            detect_column_mapping(
+services/api/app/api/companies.py-99-                headers
+services/api/app/api/companies.py-100-            )
+services/api/app/api/companies.py-101-        )
+services/api/app/api/companies.py-102-
+services/api/app/api/companies.py-103-    except UnicodeDecodeError:
+services/api/app/api/companies.py-104-        raise HTTPException(
+services/api/app/api/companies.py-105-            status_code=400,
+services/api/app/api/companies.py-106-            detail=(
+services/api/app/api/companies.py-107-                "Could not read the CSV file."
+services/api/app/api/companies.py-108-            ),
+services/api/app/api/companies.py-109-        )
+services/api/app/api/companies.py-110-
+services/api/app/api/companies.py-111-    applied_mapping = (
+services/api/app/api/companies.py-112-        detected_mapping
+services/api/app/api/companies.py-113-    )
+services/api/app/api/companies.py-114-
+services/api/app/api/companies.py-115-    if column_mapping:
+services/api/app/api/companies.py-116-        try:
+services/api/app/api/companies.py-117-            parsed_mapping = (
+services/api/app/api/companies.py-118-                json.loads(
+services/api/app/api/companies.py-119-                    column_mapping
+services/api/app/api/companies.py-120-                )
+services/api/app/api/companies.py-121-            )
+services/api/app/api/companies.py-122-        except json.JSONDecodeError:
+services/api/app/api/companies.py-123-            raise HTTPException(
+services/api/app/api/companies.py-124-                status_code=400,
+services/api/app/api/companies.py-125-                detail=(
+services/api/app/api/companies.py-126-                    "Column mapping must be valid JSON."
+services/api/app/api/companies.py-127-                ),
+services/api/app/api/companies.py-128-            )
+services/api/app/api/companies.py-129-
+services/api/app/api/companies.py-130-        if not isinstance(
+services/api/app/api/companies.py-131-            parsed_mapping,
+services/api/app/api/companies.py-132-            dict,
+services/api/app/api/companies.py-133-        ):
+services/api/app/api/companies.py-134-            raise HTTPException(
+services/api/app/api/companies.py-135-                status_code=400,
+services/api/app/api/companies.py-136-                detail=(
+services/api/app/api/companies.py-137-                    "Column mapping must be an object."
+services/api/app/api/companies.py-138-                ),
+services/api/app/api/companies.py-139-            )
+services/api/app/api/companies.py-140-
+services/api/app/api/companies.py-141-        valid_fields = set(
+services/api/app/api/companies.py-142-            ALL_FIELD_ALIASES.keys()
+services/api/app/api/companies.py-143-        )
+services/api/app/api/companies.py-144-
+services/api/app/api/companies.py-145-        valid_headers = set(
+services/api/app/api/companies.py-146-            headers
+services/api/app/api/companies.py-147-        )
+services/api/app/api/companies.py-148-
+services/api/app/api/companies.py-149-        cleaned_mapping = {}
+services/api/app/api/companies.py-150-
+services/api/app/api/companies.py-151-        for (
+services/api/app/api/companies.py-152-            target_field,
+services/api/app/api/companies.py-153-            source_column,
+services/api/app/api/companies.py-154-        ) in parsed_mapping.items():
+services/api/app/api/companies.py-155-            if (
+services/api/app/api/companies.py-156-                target_field
+services/api/app/api/companies.py-157-                not in valid_fields
+services/api/app/api/companies.py-158-            ):
+services/api/app/api/companies.py-159-                raise HTTPException(
+services/api/app/api/companies.py-160-                    status_code=400,
+services/api/app/api/companies.py-161-                    detail=(
+services/api/app/api/companies.py-162-                        f"Unknown target field: "
+services/api/app/api/companies.py-163-                        f"{target_field}"
+services/api/app/api/companies.py-164-                    ),
+services/api/app/api/companies.py-165-                )
+services/api/app/api/companies.py-166-
+services/api/app/api/companies.py-167-            if (
+services/api/app/api/companies.py-168-                source_column
+services/api/app/api/companies.py-169-                in (
+services/api/app/api/companies.py-170-                    None,
+services/api/app/api/companies.py-171-                    "",
+services/api/app/api/companies.py-172-                )
+services/api/app/api/companies.py-173-            ):
+services/api/app/api/companies.py-174-                continue
+services/api/app/api/companies.py-175-
+services/api/app/api/companies.py-176-            if (
+services/api/app/api/companies.py-177-                source_column
+services/api/app/api/companies.py-178-                not in valid_headers
+services/api/app/api/companies.py-179-            ):
+services/api/app/api/companies.py-180-                raise HTTPException(
+services/api/app/api/companies.py-181-                    status_code=400,
+services/api/app/api/companies.py-182-                    detail=(
+services/api/app/api/companies.py-183-                        f"CSV column not found: "
+services/api/app/api/companies.py-184-                        f"{source_column}"
+services/api/app/api/companies.py-185-                    ),
+services/api/app/api/companies.py-186-                )
+services/api/app/api/companies.py-187-
+services/api/app/api/companies.py-188-            cleaned_mapping[
+services/api/app/api/companies.py-189-                target_field
+services/api/app/api/companies.py-190-            ] = source_column
+services/api/app/api/companies.py-191-
+services/api/app/api/companies.py-192-        applied_mapping = (
+services/api/app/api/companies.py-193-            cleaned_mapping
+services/api/app/api/companies.py-194-        )
+services/api/app/api/companies.py-195-
+services/api/app/api/companies.py-196-    try:
+services/api/app/api/companies.py-197-        (
+services/api/app/api/companies.py-198-            companies,
+services/api/app/api/companies.py-199-            crm_contexts,
+services/api/app/api/companies.py-200-        ) = import_accounts_from_csv(
+services/api/app/api/companies.py-201-            content,
+services/api/app/api/companies.py-202-            column_mapping=(
+services/api/app/api/companies.py-203-                applied_mapping
+services/api/app/api/companies.py-204-            ),
+services/api/app/api/companies.py-205-        )
+services/api/app/api/companies.py-206-
+services/api/app/api/companies.py-207-    except UnicodeDecodeError:
+services/api/app/api/companies.py-208-        raise HTTPException(
+services/api/app/api/companies.py-209-            status_code=400,
+services/api/app/api/companies.py-210-            detail=(
+services/api/app/api/companies.py-211-                "Could not read the CSV file."
+services/api/app/api/companies.py-212-            ),
+services/api/app/api/companies.py-213-        )
+services/api/app/api/companies.py-214-
+services/api/app/api/companies.py-215-    return {
+services/api/app/api/companies.py-216-        "filename": file.filename,
+services/api/app/api/companies.py-217-        "headers": headers,
+services/api/app/api/companies.py-218-        "detected_mapping": (
+services/api/app/api/companies.py-219-            detected_mapping
+services/api/app/api/companies.py-220-        ),
+services/api/app/api/companies.py-221-        "applied_mapping": (
+services/api/app/api/companies.py-222-            applied_mapping
+services/api/app/api/companies.py-223-        ),
+services/api/app/api/companies.py-224-        "available_fields": list(
+services/api/app/api/companies.py-225-            ALL_FIELD_ALIASES.keys()
+services/api/app/api/companies.py-226-        ),
+services/api/app/api/companies.py-227-        "imported_count": len(
+services/api/app/api/companies.py-228-            companies
+services/api/app/api/companies.py-229-        ),
+services/api/app/api/companies.py-230-        "detected_crm_count": len(
+services/api/app/api/companies.py-231-            crm_contexts
+services/api/app/api/companies.py-232-        ),
+services/api/app/api/companies.py-233-        "companies": companies,
+services/api/app/api/companies.py-234-        "crm_contexts": (
+services/api/app/api/companies.py-235-            crm_contexts
+services/api/app/api/companies.py-236-        ),
+services/api/app/api/companies.py-237-    }
+services/api/app/api/companies.py-238-
+services/api/app/api/companies.py-239-
+services/api/app/api/companies.py:240:@router.post(
+services/api/app/api/companies.py-241-    "/enrich",
+services/api/app/api/companies.py-242-    response_model=WebsiteEnrichment,
+services/api/app/api/companies.py-243-)
+services/api/app/api/companies.py-244-async def enrich_company(
+services/api/app/api/companies.py-245-    request: CompanyEnrichmentRequest,
+services/api/app/api/companies.py-246-):
+services/api/app/api/companies.py-247-    return (
+services/api/app/api/companies.py-248-        await website_enrichment_provider.enrich(
+services/api/app/api/companies.py-249-            request.company
+services/api/app/api/companies.py-250-        )
+services/api/app/api/companies.py-251-    )
+services/api/app/api/companies.py-252-
+services/api/app/api/companies.py-253-
+services/api/app/api/companies.py:254:@router.post(
+services/api/app/api/companies.py-255-    "/score",
+services/api/app/api/companies.py-256-    response_model=CompanyScore,
+services/api/app/api/companies.py-257-)
+services/api/app/api/companies.py-258-def score_company_endpoint(
+services/api/app/api/companies.py-259-    request: ScoreCompanyRequest,
+services/api/app/api/companies.py-260-):
+services/api/app/api/companies.py-261-    crm_context = (
+services/api/app/api/companies.py-262-        request.crm_context
+services/api/app/api/companies.py-263-        or crm_provider.get_context(
+services/api/app/api/companies.py-264-            request.company
+services/api/app/api/companies.py-265-        )
+services/api/app/api/companies.py-266-    )
+services/api/app/api/companies.py-267-
+services/api/app/api/companies.py-268-    return score_company(
+services/api/app/api/companies.py-269-        company=request.company,
+services/api/app/api/companies.py-270-        icp=request.icp,
+services/api/app/api/companies.py-271-        crm_context=crm_context,
+services/api/app/api/companies.py-272-    )
+services/api/app/api/companies.py-273-
+services/api/app/api/companies.py-274-
+services/api/app/api/companies.py:275:@router.post(
+services/api/app/api/companies.py-276-    "/rank",
+services/api/app/api/companies.py-277-    response_model=BatchScoreResponse,
+services/api/app/api/companies.py-278-)
+services/api/app/api/companies.py-279-def rank_companies(
+services/api/app/api/companies.py-280-    request: BatchScoreRequest,
+services/api/app/api/companies.py-281-):
+services/api/app/api/companies.py-282-    crm_contexts = (
+services/api/app/api/companies.py-283-        crm_provider.get_contexts(
+services/api/app/api/companies.py-284-            request.companies
+services/api/app/api/companies.py-285-        )
+services/api/app/api/companies.py-286-    )
+services/api/app/api/companies.py-287-
+services/api/app/api/companies.py-288-    crm_contexts.update(
+services/api/app/api/companies.py-289-        request.crm_contexts
+services/api/app/api/companies.py-290-    )
+services/api/app/api/companies.py-291-
+services/api/app/api/companies.py-292-    scored = score_and_rank_companies(
+services/api/app/api/companies.py-293-        companies=request.companies,
+services/api/app/api/companies.py-294-        icp=request.icp,
+services/api/app/api/companies.py-295-        crm_contexts=crm_contexts,
+services/api/app/api/companies.py-296-    )
+services/api/app/api/companies.py-297-
+services/api/app/api/companies.py-298-    ranked = [
+services/api/app/api/companies.py-299-        RankedCompanyScore(
+services/api/app/api/companies.py-300-            rank=index,
+services/api/app/api/companies.py-301-            **item.model_dump(),
+services/api/app/api/companies.py-302-        )
+services/api/app/api/companies.py-303-        for index, item in enumerate(
+services/api/app/api/companies.py-304-            scored,
+services/api/app/api/companies.py-305-            start=1,
+services/api/app/api/companies.py-306-        )
+services/api/app/api/companies.py-307-    ]
+services/api/app/api/companies.py-308-
+services/api/app/api/companies.py-309-    return BatchScoreResponse(
+services/api/app/api/companies.py-310-        total_companies=len(
+services/api/app/api/companies.py-311-            ranked
+services/api/app/api/companies.py-312-        ),
+services/api/app/api/companies.py-313-        results=ranked,
+services/api/app/api/companies.py-314-    )
+
+--- WEBSITE PROVIDER ---
+import httpx
+
+from services.api.app.integrations.enrichment.base import EnrichmentProvider
+from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.enrichment import WebsiteEnrichment
+from services.api.app.services.website_parser import extract_website_signals
+
+
+class WebsiteEnrichmentProvider(EnrichmentProvider):
+    def __init__(self):
+        self.timeout = 8.0
+
+        self.headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; GTMDecisionEngine/0.1; "
+                "+portfolio-project)"
+            )
+        }
+
+    async def enrich(
+        self,
+        company: CompanyNormalized,
+    ) -> WebsiteEnrichment:
+        url = company.website
+
+        if not url and company.domain:
+            url = f"https://{company.domain}"
+
+        if not url:
+            return WebsiteEnrichment(
+                reachable=False,
+                error="No website or domain available.",
+            )
+
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=self.timeout,
+                headers=self.headers,
+            ) as client:
+                response = await client.get(url)
+
+            if response.status_code >= 400:
+                return WebsiteEnrichment(
+                    requested_url=url,
+                    final_url=str(response.url),
+                    reachable=False,
+                    status_code=response.status_code,
+                    error=f"Website returned HTTP {response.status_code}.",
+                )
+
+            html = response.text[:2_000_000]
+
+            signals = extract_website_signals(html)
+
+            return WebsiteEnrichment(
+                requested_url=url,
+                final_url=str(response.url),
+                reachable=True,
+                status_code=response.status_code,
+                **signals,
+            )
+
+        except httpx.RequestError as exc:
+            return WebsiteEnrichment(
+                requested_url=url,
+                reachable=False,
+                error=f"Website request failed: {exc.__class__.__name__}",
+            )
+
+--- SETTINGS ---
+services/api/app/core/config.py
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    database_url: str
+    app_env: str = "development"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+services/api/app/core/database.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+from services.api.app.core.config import get_settings
+
+
+settings = get_settings()
+
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def get_db():
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+services/api/app/core/priority_policy.py
+ICP_WEIGHT = 0.75
+SIGNAL_WEIGHT = 0.25
+
+HIGH_PRIORITY_THRESHOLD = 80
+MEDIUM_PRIORITY_THRESHOLD = 55
+services/api/app/core/decision_policy.py
+HIGH_FIT_THRESHOLD = 80
+MEDIUM_FIT_THRESHOLD = 50
+HIGH_CONFIDENCE_THRESHOLD = 80
+
+--- ENV EXAMPLE ---
+PUBLIC_PORTFOLIO_MODE=false
