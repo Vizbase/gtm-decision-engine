@@ -251,8 +251,23 @@ def score_and_rank_companies(
             )
         )
 
+    action_priority = {
+        "continue_opportunity": 8,
+        "follow_up_existing": 7,
+        "work_now": 6,
+        "expansion": 5,
+        "research_first": 4,
+        "nurture": 3,
+        "pause_outreach": 2,
+        "deprioritize": 1,
+    }
+
     scored.sort(
         key=lambda item: (
+            action_priority.get(
+                item.recommended_action,
+                0,
+            ),
             item.priority_score,
             item.signal_score,
             item.data_confidence,
