@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import AnalysisHistoryPanel from "@/components/AnalysisHistoryPanel";
 import CompanyDetailPanel from "@/components/CompanyDetailPanel";
 import CsvUploadPanel from "@/components/CsvUploadPanel";
+import DecisionSummary from "@/components/DecisionSummary";
 import PriorityFilters, {
   PriorityFilter,
 } from "@/components/PriorityFilters";
@@ -308,6 +309,9 @@ export default function Home() {
   const workNow =
     filterCounts.work_now;
 
+  const isDemo =
+    analysis?.workspace_name === "Demo Workspace";
+
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -388,11 +392,19 @@ export default function Home() {
         {analysis && (
           <>
             <div className="mb-7">
-              <p className="text-sm font-medium text-slate-500">
-                {analysis.workspace_name}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-slate-500">
+                  {analysis.workspace_name}
+                </p>
 
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                {isDemo && (
+                  <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                    Demo
+                  </span>
+                )}
+              </div>
+
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
                 Account Priority Overview
               </h2>
 
@@ -403,6 +415,12 @@ export default function Home() {
                 · Click an account to inspect its recommendation.
               </p>
             </div>
+
+
+            <DecisionSummary
+              results={results}
+              isDemo={isDemo}
+            />
 
 
             <section className="grid gap-4 md:grid-cols-3">
@@ -423,7 +441,7 @@ export default function Home() {
             </section>
 
 
-            <section className="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-6 py-5">
                 <div className="flex flex-col gap-5">
                   <div>
@@ -559,10 +577,12 @@ export default function Home() {
                             </span>
                           </td>
 
-                          <td className="px-6 py-5 font-medium text-slate-900">
-                            {formatAction(
-                              result.recommended_action
-                            )}
+                          <td className="px-6 py-5">
+                            <ActionBadge
+                              action={
+                                result.recommended_action
+                              }
+                            />
                           </td>
                         </tr>
                       )
@@ -650,12 +670,12 @@ function MetricCard({
   value: number;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6">
       <p className="text-sm font-medium text-slate-500">
         {label}
       </p>
 
-      <p className="mt-3 text-3xl font-semibold text-slate-950">
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
         {value}
       </p>
     </div>
@@ -684,6 +704,49 @@ function ScoreBadge({
       className={`inline-flex min-w-12 justify-center rounded-full px-3 py-1 font-semibold ${classes}`}
     >
       {score}
+    </span>
+  );
+}
+
+
+function ActionBadge({
+  action,
+}: {
+  action: string;
+}) {
+  let classes =
+    "bg-slate-100 text-slate-700";
+
+  if (action === "work_now") {
+    classes =
+      "bg-emerald-50 text-emerald-700";
+  } else if (
+    action === "research_first"
+  ) {
+    classes =
+      "bg-amber-50 text-amber-700";
+  } else if (
+    action === "continue_opportunity"
+  ) {
+    classes =
+      "bg-blue-50 text-blue-700";
+  } else if (
+    action === "expansion"
+  ) {
+    classes =
+      "bg-violet-50 text-violet-700";
+  } else if (
+    action === "deprioritize"
+  ) {
+    classes =
+      "bg-slate-100 text-slate-500";
+  }
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${classes}`}
+    >
+      {formatAction(action)}
     </span>
   );
 }
