@@ -1,7 +1,14 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from services.api.app.integrations.crm.demo_provider import DemoCRMProvider
+from services.api.app.integrations.enrichment.website_provider import (
+    WebsiteEnrichmentProvider,
+)
 from services.api.app.schemas.company import CompanyInput, CompanyNormalized
+from services.api.app.schemas.enrichment import (
+    CompanyEnrichmentRequest,
+    WebsiteEnrichment,
+)
 from services.api.app.schemas.scoring import (
     BatchScoreRequest,
     BatchScoreResponse,
@@ -22,6 +29,7 @@ router = APIRouter(
 )
 
 crm_provider = DemoCRMProvider()
+website_enrichment_provider = WebsiteEnrichmentProvider()
 
 
 @router.post("/", response_model=CompanyNormalized)
@@ -53,6 +61,13 @@ async def import_companies(file: UploadFile = File(...)):
     }
 
 
+@router.post("/enrich", response_model=WebsiteEnrichment)
+async def enrich_company(request: CompanyEnrichmentRequest):
+    return await website_enrichment_provider.enrich(
+        request.company
+    )
+
+
 @router.post("/score", response_model=CompanyScore)
 def score_company_endpoint(request: ScoreCompanyRequest):
     crm_context = (
@@ -69,10 +84,10 @@ def score_company_endpoint(request: ScoreCompanyRequest):
 
 @router.post("/rank", response_model=BatchScoreResponse)
 def rank_companies(request: BatchScoreRequest):
-    # Load CRM information automatically.
-    crm_contexts = crm_provider.get_contexts(request.companies)
+    crm_contexts = crm_provider.get_contexts(
+        request.companies
+    )
 
-    # Explicit contexts override demo/automatic CRM data.
     crm_contexts.update(request.crm_contexts)
 
     scored = score_and_rank_companies(
