@@ -7,6 +7,9 @@ from services.api.app.core.database import get_db
 from services.api.app.integrations.crm.demo_provider import (
     DemoCRMProvider,
 )
+from services.api.app.integrations.enrichment.demo_snapshot_provider import (
+    DemoSnapshotEnrichmentProvider,
+)
 from services.api.app.integrations.enrichment.website_provider import (
     WebsiteEnrichmentProvider,
 )
@@ -21,7 +24,11 @@ from services.api.app.schemas.analysis import (
     AnalysisRunSummary,
     StoredAnalysisResult,
 )
-from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.company import (
+    CompanyInput,
+    CompanyNormalized,
+)
+from services.api.app.schemas.scoring import ICPProfile
 from services.api.app.services.analysis_pipeline import (
     AnalysisPipeline,
 )
@@ -33,10 +40,92 @@ router = APIRouter(
 )
 
 
-analysis_pipeline = AnalysisPipeline(
+live_analysis_pipeline = AnalysisPipeline(
     crm_provider=DemoCRMProvider(),
     enrichment_provider=WebsiteEnrichmentProvider(),
 )
+
+
+demo_analysis_pipeline = AnalysisPipeline(
+    crm_provider=DemoCRMProvider(),
+    enrichment_provider=DemoSnapshotEnrichmentProvider(),
+)
+
+
+DEMO_ICP = ICPProfile(
+    target_countries=[
+        "Germany",
+        "Netherlands",
+        "United States",
+    ],
+    target_industries=[
+        "Software",
+        "SaaS",
+        "Artificial Intelligence",
+    ],
+    min_employees=50,
+    max_employees=10000,
+)
+
+
+DEMO_COMPANIES = [
+    CompanyInput(
+        name="HubSpot",
+        website="https://www.hubspot.com",
+        country="United States",
+        industry="Software",
+        employee_count=8000,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Acme GmbH",
+        website="https://acme.com",
+        country="Germany",
+        industry="Software",
+        employee_count=120,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Nova AI",
+        website="https://nova.ai",
+        country="Netherlands",
+        industry="Artificial Intelligence",
+        employee_count=75,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Example Systems",
+        website="https://example.com",
+        country="Germany",
+        industry="SaaS",
+        employee_count=300,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="SignalCraft",
+        website="https://signalcraft.example",
+        country="Germany",
+        industry="Software",
+        employee_count=180,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="BluePeak SaaS",
+        website="https://bluepeak.example",
+        country="France",
+        industry="SaaS",
+        employee_count=240,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Legacy Manufacturing Group",
+        website="https://legacy.example",
+        country="Spain",
+        industry="Manufacturing",
+        employee_count=25000,
+        linkedin_url=None,
+    ),
+]
 
 
 @router.post(
@@ -47,7 +136,7 @@ async def run_analysis(
     request: AnalysisRequest,
     db: Session = Depends(get_db),
 ):
-    results = await analysis_pipeline.run(
+    results = await live_analysis_pipeline.run(
         companies=request.companies,
         icp=request.icp,
         use_website_enrichment=(
@@ -60,6 +149,34 @@ async def run_analysis(
     analysis_run = repository.save_analysis(
         workspace_name=request.workspace_name,
         icp=request.icp,
+        results=results,
+    )
+
+    return AnalysisResponse(
+        analysis_run_id=analysis_run.id,
+        total_companies=len(results),
+        results=results,
+    )
+
+
+@router.post(
+    "/demo",
+    response_model=AnalysisResponse,
+)
+async def run_demo_analysis(
+    db: Session = Depends(get_db),
+):
+    results = await demo_analysis_pipeline.run(
+        companies=DEMO_COMPANIES,
+        icp=DEMO_ICP,
+        use_website_enrichment=True,
+    )
+
+    repository = AnalysisRepository(db)
+
+    analysis_run = repository.save_analysis(
+        workspace_name="Demo Workspace",
+        icp=DEMO_ICP,
         results=results,
     )
 

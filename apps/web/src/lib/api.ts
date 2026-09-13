@@ -1,5 +1,6 @@
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
 
 
 export type Company = {
@@ -84,7 +85,9 @@ export async function getAnalysisRuns(): Promise<{
   );
 
   if (!response.ok) {
-    throw new Error("Could not load analysis runs");
+    throw new Error(
+      "Could not load analysis runs"
+    );
   }
 
   return response.json();
@@ -99,15 +102,23 @@ export async function getAnalysisRun(
   );
 
   if (!response.ok) {
-    throw new Error("Could not load analysis run");
+    throw new Error(
+      "Could not load analysis run"
+    );
   }
 
   return response.json();
 }
 
 
-export async function uploadCompaniesCsv(file: File) {
+export async function uploadCompaniesCsv(
+  file: File
+): Promise<{
+  imported_count: number;
+  companies: Company[];
+}> {
   const formData = new FormData();
+
   formData.append("file", file);
 
   const response = await fetch(
@@ -131,6 +142,18 @@ export async function runAnalysis(
   icp: ICPInput,
   workspaceName = "CSV Workspace"
 ) {
+  const cleanCompanies = companies.map(
+    (company) => ({
+      name: company.name,
+      website: company.website,
+      country: company.country,
+      industry: company.industry,
+      employee_count:
+        company.employee_count,
+      linkedin_url: company.linkedin_url,
+    })
+  );
+
   const response = await fetch(
     `${API_URL}/analysis/run`,
     {
@@ -140,7 +163,7 @@ export async function runAnalysis(
       },
       body: JSON.stringify({
         workspace_name: workspaceName,
-        companies,
+        companies: cleanCompanies,
         icp,
         use_website_enrichment: true,
       }),
@@ -156,48 +179,35 @@ export async function runAnalysis(
 
 
 export async function runDemoAnalysis() {
-  return runAnalysis(
-    [
-      {
-        name: "HubSpot",
-        website: "https://www.hubspot.com",
-        country: "United States",
-        industry: "Software",
-        employee_count: 8000,
-        linkedin_url: null,
-      },
-      {
-        name: "Acme GmbH",
-        website: "acme.com",
-        country: "Germany",
-        industry: "Software",
-        employee_count: 120,
-        linkedin_url: null,
-      },
-      {
-        name: "Nova AI",
-        website: "nova.ai",
-        country: "Netherlands",
-        industry: "Artificial Intelligence",
-        employee_count: 75,
-        linkedin_url: null,
-      },
-    ],
+  const response = await fetch(
+    `${API_URL}/analysis/demo`,
     {
-      target_countries: [
-        "Germany",
-        "Netherlands",
-        "United States",
-      ],
-      target_industries: [
-        "Software",
-        "SaaS",
-      ],
-      min_employees: 50,
-      max_employees: 10000,
-    },
-    "Demo Workspace"
+      method: "POST",
+    }
   );
+
+  if (!response.ok) {
+    throw new Error(
+      "Demo analysis failed"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function checkBackendHealth() {
+  const response = await fetch(
+    `${API_URL}/health`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Backend is not available"
+    );
+  }
+
+  return response.json();
 }
 
 
