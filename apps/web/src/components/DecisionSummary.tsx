@@ -27,7 +27,7 @@ export default function DecisionSummary({
 
   const topAccount = [...results].sort(
     (a, b) =>
-      b.priority_score - a.priority_score
+      a.rank - b.rank
   )[0];
 
   const workNow = results.filter(
@@ -84,7 +84,7 @@ export default function DecisionSummary({
           <MiniStat
             label="Top account"
             value={topAccount.company.name}
-            detail={`${topAccount.priority_score} priority`}
+            detail={`${topAccount.priority_score} account score`}
           />
 
           <MiniStat

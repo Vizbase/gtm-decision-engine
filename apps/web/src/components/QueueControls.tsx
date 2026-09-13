@@ -46,7 +46,7 @@ export default function QueueControls({
         </option>
 
         <option value="priority">
-          Sort: Priority
+          Sort: Account Score
         </option>
 
         <option value="icp">

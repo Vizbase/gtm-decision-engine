@@ -18,7 +18,7 @@ const filters: {
   },
   {
     value: "high_priority",
-    label: "High Priority",
+    label: "High Account Score",
   },
   {
     value: "work_now",

@@ -66,30 +66,37 @@ export default function CompanyDetailPanel({
           </section>
 
 
-          <section className="grid grid-cols-2 gap-3">
-            <Score
-              label="Priority"
-              value={result.priority_score}
-            />
+          <section>
+            <div className="grid grid-cols-2 gap-3">
+              <Score
+                label="Account Score"
+                value={result.priority_score}
+              />
 
-            <Score
-              label="ICP Fit"
-              value={
-                result.fit_level === "not_configured"
-                  ? "Not configured"
-                  : result.icp_score
-              }
-            />
+              <Score
+                label="ICP Fit"
+                value={
+                  result.fit_level === "not_configured"
+                    ? "Not configured"
+                    : result.icp_score
+                }
+              />
 
-            <Score
-              label="Signals"
-              value={result.signal_score}
-            />
+              <Score
+                label="Signals"
+                value={result.signal_score}
+              />
 
-            <Score
-              label="Data Confidence"
-              value={result.data_confidence}
-            />
+              <Score
+                label="Data Confidence"
+                value={result.data_confidence}
+              />
+            </div>
+
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Account Score summarizes fit, signals, and available data.
+              Queue rank and recommended action also consider CRM context.
+            </p>
           </section>
 
 

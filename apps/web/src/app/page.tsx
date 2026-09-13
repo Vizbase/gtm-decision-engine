@@ -430,7 +430,7 @@ export default function Home() {
               />
 
               <MetricCard
-                label="High priority"
+                label="High account score"
                 value={highPriority}
               />
 
@@ -450,7 +450,7 @@ export default function Home() {
                     </h3>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Accounts ranked by fit, signals, and GTM context.
+                      Accounts ranked by recommended sales action first, then account score.
                     </p>
                   </div>
 
@@ -496,7 +496,7 @@ export default function Home() {
                       </th>
 
                       <th className="px-6 py-4">
-                        Priority
+                        Account Score
                       </th>
 
                       <th className="px-6 py-4">
