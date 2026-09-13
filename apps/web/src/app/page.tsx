@@ -558,9 +558,9 @@ export default function Home() {
                           </td>
 
                           <td className="px-6 py-5 text-slate-700">
-                            {
-                              result.icp_score
-                            }
+                            {result.fit_level === "not_configured"
+                              ? "—"
+                              : result.icp_score}
                           </td>
 
                           <td className="px-6 py-5 text-slate-700">

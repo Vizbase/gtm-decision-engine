@@ -41,6 +41,10 @@ export default function DecisionSummary({
       "research_first"
   ).length;
 
+  const icpConfigured = results.some(
+    (item) => item.fit_level !== "not_configured"
+  );
+
   return (
     <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
@@ -62,9 +66,9 @@ export default function DecisionSummary({
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            The engine combines ICP fit, buying signals,
-            CRM context, and data confidence to recommend
-            the next best action for every account.
+            {icpConfigured
+              ? "The engine combines ICP fit, buying signals, CRM context, and data confidence to recommend the next best action for every account."
+              : "No ICP profile is configured for this run. Accounts are prioritized using current signals, CRM context, and data confidence."}
           </p>
 
           {isDemo && (

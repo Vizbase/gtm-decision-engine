@@ -14,7 +14,7 @@ from services.api.app.schemas.scoring import CompanyScore, ICPProfile
 
 class AnalysisRequest(BaseModel):
     companies: list[CompanyInput]
-    icp: ICPProfile
+    icp: ICPProfile = Field(default_factory=ICPProfile)
     workspace_name: str = "Demo Workspace"
     use_website_enrichment: bool = True
 

@@ -14,64 +14,111 @@ from services.api.app.services.signal_scorer import (
 )
 
 
-def score_company(
+def is_icp_configured(icp: ICPProfile) -> bool:
+    return bool(
+        icp.target_countries
+        or icp.target_industries
+        or icp.min_employees is not None
+        or icp.max_employees is not None
+    )
+
+
+def calculate_icp_fit(
     company: CompanyNormalized,
     icp: ICPProfile,
-    crm_context: CRMContext | None = None,
-    enrichment: WebsiteEnrichment | None = None,
-) -> CompanyScore:
-    crm_context = crm_context or CRMContext()
+) -> tuple[int, str, list[str]]:
+    configured = is_icp_configured(icp)
 
-    score = 0
-    reasons = []
+    if not configured:
+        return (
+            0,
+            "not_configured",
+            [
+                "ICP not configured; this account was not filtered or penalized by fit."
+            ],
+        )
 
-    # Country: 30 points
-    if company.country and icp.target_countries:
-        countries = [
-            country.lower()
+    matched_weight = 0
+    configured_weight = 0
+    reasons: list[str] = []
+
+    # Country criterion: weight 30
+    if icp.target_countries:
+        configured_weight += 30
+
+        countries = {
+            country.strip().lower()
             for country in icp.target_countries
-        ]
+        }
 
-        if company.country.lower() in countries:
-            score += 30
+        if (
+            company.country
+            and company.country.strip().lower() in countries
+        ):
+            matched_weight += 30
             reasons.append("Target country match")
         else:
             reasons.append("Country outside target market")
 
-    # Industry: 40 points
-    if company.industry and icp.target_industries:
-        industries = [
-            industry.lower()
-            for industry in icp.target_industries
-        ]
+    # Industry criterion: weight 40
+    if icp.target_industries:
+        configured_weight += 40
 
-        if company.industry.lower() in industries:
-            score += 40
+        industries = {
+            industry.strip().lower()
+            for industry in icp.target_industries
+        }
+
+        if (
+            company.industry
+            and company.industry.strip().lower() in industries
+        ):
+            matched_weight += 40
             reasons.append("Target industry match")
         else:
             reasons.append("Industry outside target ICP")
 
-    # Company size: 30 points
-    if company.employee_count is not None:
-        min_ok = (
-            icp.min_employees is None
-            or company.employee_count >= icp.min_employees
-        )
+    # Company-size criterion: weight 30.
+    # Only contributes when the user actually configured a range.
+    size_configured = (
+        icp.min_employees is not None
+        or icp.max_employees is not None
+    )
 
-        max_ok = (
-            icp.max_employees is None
-            or company.employee_count <= icp.max_employees
-        )
+    if size_configured:
+        configured_weight += 30
 
-        if min_ok and max_ok:
-            score += 30
+        if company.employee_count is None:
             reasons.append(
-                "Company size within preferred range"
+                "Company size unavailable for ICP comparison"
             )
         else:
-            reasons.append(
-                "Company size outside preferred range"
+            min_ok = (
+                icp.min_employees is None
+                or company.employee_count >= icp.min_employees
             )
+
+            max_ok = (
+                icp.max_employees is None
+                or company.employee_count <= icp.max_employees
+            )
+
+            if min_ok and max_ok:
+                matched_weight += 30
+                reasons.append(
+                    "Company size within preferred range"
+                )
+            else:
+                reasons.append(
+                    "Company size outside preferred range"
+                )
+
+    # Normalize against only the criteria that were configured.
+    score = (
+        round((matched_weight / configured_weight) * 100)
+        if configured_weight
+        else 0
+    )
 
     if score >= 80:
         fit_level = "high"
@@ -80,16 +127,30 @@ def score_company(
     else:
         fit_level = "low"
 
-    # Data confidence
+    return score, fit_level, reasons
+
+
+def score_company(
+    company: CompanyNormalized,
+    icp: ICPProfile,
+    crm_context: CRMContext | None = None,
+    enrichment: WebsiteEnrichment | None = None,
+) -> CompanyScore:
+    crm_context = crm_context or CRMContext()
+
+    icp_configured = is_icp_configured(icp)
+
+    score, fit_level, reasons = calculate_icp_fit(
+        company=company,
+        icp=icp,
+    )
+
     data_confidence, confidence_level, confidence_reasons = (
         calculate_data_confidence(company)
     )
 
-    # Website / buying signals
     signal_result = calculate_signal_score(enrichment)
 
-    # Only use the signal score if enrichment actually succeeded.
-    # Failed or unavailable enrichment is uncertainty, not a negative signal.
     enrichment_available = (
         enrichment is not None
         and enrichment.reachable
@@ -102,8 +163,13 @@ def score_company(
     )
 
     priority_score, priority_level = calculate_priority_score(
-        icp_score=score,
+        icp_score=(
+            score
+            if icp_configured
+            else None
+        ),
         signal_score=signal_for_priority,
+        data_confidence=data_confidence,
     )
 
     decision = make_decision(
@@ -120,6 +186,7 @@ def score_company(
             if enrichment is not None
             else None
         ),
+        icp_configured=icp_configured,
     )
 
     return CompanyScore(
@@ -187,8 +254,9 @@ def score_and_rank_companies(
     scored.sort(
         key=lambda item: (
             item.priority_score,
-            item.icp_score,
+            item.signal_score,
             item.data_confidence,
+            item.icp_score,
         ),
         reverse=True,
     )

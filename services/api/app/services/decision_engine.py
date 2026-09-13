@@ -23,6 +23,7 @@ def make_decision(
     crm_context: CRMContext | None = None,
     signal_score: int | None = None,
     enrichment_available: bool | None = None,
+    icp_configured: bool = True,
 ) -> DecisionResult:
     crm_context = crm_context or CRMContext()
 
@@ -53,6 +54,69 @@ def make_decision(
             ),
         )
 
+    # When no ICP has been configured, do not interpret
+    # the absence of an ICP score as poor account fit.
+    if not icp_configured:
+        priority_score, _ = calculate_priority_score(
+            icp_score=None,
+            signal_score=(
+                signal_score
+                if enrichment_available is not False
+                else None
+            ),
+            data_confidence=data_confidence,
+        )
+
+        if crm_context.status == CRMStatus.EXISTING_LEAD:
+            if (
+                priority_score >= HIGH_PRIORITY_THRESHOLD
+                and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+            ):
+                return DecisionResult(
+                    recommended_action=RecommendedAction.FOLLOW_UP_EXISTING,
+                    action_reason=(
+                        "An existing CRM lead has strong current signals "
+                        "and reliable data; continue working the existing record."
+                    ),
+                )
+
+            return DecisionResult(
+                recommended_action=RecommendedAction.NURTURE,
+                action_reason=(
+                    "An existing CRM lead is present, but no ICP profile "
+                    "has been configured to evaluate account fit."
+                ),
+            )
+
+        if enrichment_available is False or signal_score is None:
+            return DecisionResult(
+                recommended_action=RecommendedAction.RESEARCH_FIRST,
+                action_reason=(
+                    "No ICP profile is configured and current buying signals "
+                    "could not be verified; research the account before outreach."
+                ),
+            )
+
+        if (
+            priority_score >= HIGH_PRIORITY_THRESHOLD
+            and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+        ):
+            return DecisionResult(
+                recommended_action=RecommendedAction.WORK_NOW,
+                action_reason=(
+                    "Strong current account signals with high-confidence data."
+                ),
+            )
+
+        return DecisionResult(
+            recommended_action=RecommendedAction.NURTURE,
+            action_reason=(
+                "No ICP profile is configured; keep the account in consideration "
+                "until stronger timing signals or targeting criteria are available."
+            ),
+        )
+
+    # Existing-lead behavior when ICP is configured.
     if crm_context.status == CRMStatus.EXISTING_LEAD:
         if (
             icp_score >= HIGH_FIT_THRESHOLD
@@ -105,8 +169,7 @@ def make_decision(
             ),
         )
 
-    # If the account looks strong but live enrichment failed,
-    # request more research rather than silently downgrading it.
+    # Failed enrichment is uncertainty, not proof of poor fit.
     if (
         icp_score >= HIGH_FIT_THRESHOLD
         and enrichment_available is False
@@ -122,6 +185,7 @@ def make_decision(
     priority_score, _ = calculate_priority_score(
         icp_score=icp_score,
         signal_score=signal_score,
+        data_confidence=data_confidence,
     )
 
     if (

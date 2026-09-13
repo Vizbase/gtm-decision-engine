@@ -74,7 +74,11 @@ export default function CompanyDetailPanel({
 
             <Score
               label="ICP Fit"
-              value={result.icp_score}
+              value={
+                result.fit_level === "not_configured"
+                  ? "Not configured"
+                  : result.icp_score
+              }
             />
 
             <Score
@@ -187,7 +191,7 @@ function Score({
   value,
 }: {
   label: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <div className="rounded-xl border border-slate-200 p-4">
