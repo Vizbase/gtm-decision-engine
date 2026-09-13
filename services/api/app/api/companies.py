@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from services.api.app.integrations.crm.demo_provider import DemoCRMProvider
 from services.api.app.schemas.company import CompanyInput, CompanyNormalized
 from services.api.app.schemas.scoring import (
     BatchScoreRequest,
@@ -19,6 +20,8 @@ router = APIRouter(
     prefix="/companies",
     tags=["Companies"],
 )
+
+crm_provider = DemoCRMProvider()
 
 
 @router.post("/", response_model=CompanyNormalized)
@@ -52,19 +55,30 @@ async def import_companies(file: UploadFile = File(...)):
 
 @router.post("/score", response_model=CompanyScore)
 def score_company_endpoint(request: ScoreCompanyRequest):
+    crm_context = (
+        request.crm_context
+        or crm_provider.get_context(request.company)
+    )
+
     return score_company(
         company=request.company,
         icp=request.icp,
-        crm_context=request.crm_context,
+        crm_context=crm_context,
     )
 
 
 @router.post("/rank", response_model=BatchScoreResponse)
 def rank_companies(request: BatchScoreRequest):
+    # Load CRM information automatically.
+    crm_contexts = crm_provider.get_contexts(request.companies)
+
+    # Explicit contexts override demo/automatic CRM data.
+    crm_contexts.update(request.crm_contexts)
+
     scored = score_and_rank_companies(
         companies=request.companies,
         icp=request.icp,
-        crm_contexts=request.crm_contexts,
+        crm_contexts=crm_contexts,
     )
 
     ranked = [

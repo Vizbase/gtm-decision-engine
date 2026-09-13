@@ -35,14 +35,15 @@ class CompanyScore(BaseModel):
 class ScoreCompanyRequest(BaseModel):
     company: CompanyNormalized
     icp: ICPProfile
-    crm_context: CRMContext = Field(default_factory=CRMContext)
+    crm_context: Optional[CRMContext] = None
 
 
 class BatchScoreRequest(BaseModel):
     companies: list[CompanyNormalized]
     icp: ICPProfile
 
-    # Key = company domain, for example "acme.com"
+    # Optional manual CRM overrides.
+    # Key = company domain, e.g. "acme.com"
     crm_contexts: dict[str, CRMContext] = Field(default_factory=dict)
 
 

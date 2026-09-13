@@ -1,0 +1,20 @@
+{
+  "acme.com": {
+    "status": "open_opportunity",
+    "owner": "Anna Keller",
+    "opportunity_stage": "Negotiation",
+    "days_since_last_contact": 3
+  },
+  "nova.ai": {
+    "status": "existing_customer",
+    "owner": "Max Weber",
+    "opportunity_stage": null,
+    "days_since_last_contact": 20
+  },
+  "example.com": {
+    "status": "existing_lead",
+    "owner": "Laura Schmidt",
+    "opportunity_stage": null,
+    "days_since_last_contact": 12
+  }
+}
