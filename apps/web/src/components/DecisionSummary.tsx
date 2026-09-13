@@ -46,26 +46,26 @@ export default function DecisionSummary({
   );
 
   return (
-    <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
+    <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-950 shadow-xl shadow-slate-200/50">
+      <div className="flex flex-col gap-6 p-7 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-white">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/15">
               Decision Summary
             </span>
 
             {isDemo && (
-              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+              <span className="rounded-full bg-violet-400/15 px-3 py-1 text-xs font-semibold text-violet-200 ring-1 ring-violet-300/20">
                 Demo Snapshot
               </span>
             )}
           </div>
 
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
-            Focus sales attention where it matters most.
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white">
+            Where should sales focus next?
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <p className="mt-2 text-sm leading-6 text-slate-300">
             {icpConfigured
               ? "The engine combines ICP fit, buying signals, CRM context, and data confidence to recommend the next best action for every account."
               : "No ICP profile is configured for this run. Accounts are prioritized using current signals, CRM context, and data confidence."}
@@ -101,13 +101,13 @@ export default function DecisionSummary({
         </div>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/70 px-6 py-3 text-xs text-slate-500">
+      <div className="border-t border-white/10 bg-white/5 px-7 py-3 text-xs text-slate-300">
         Current top recommendation:{" "}
-        <span className="font-semibold text-slate-800">
+        <span className="font-semibold text-white">
           {topAccount.company.name}
         </span>{" "}
         →{" "}
-        <span className="font-semibold text-slate-800">
+        <span className="font-semibold text-white">
           {formatAction(
             topAccount.recommended_action
           )}
@@ -128,12 +128,12 @@ function MiniStat({
   detail: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-medium text-slate-500">
+    <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+      <p className="text-xs font-medium text-slate-400">
         {label}
       </p>
 
-      <p className="mt-2 truncate text-lg font-semibold text-slate-950">
+      <p className="mt-2 truncate text-lg font-semibold text-white">
         {value}
       </p>
 

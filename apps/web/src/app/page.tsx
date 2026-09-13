@@ -332,19 +332,109 @@ export default function Home() {
   const isDemo =
     analysis?.workspace_name === "Demo Workspace";
 
+  const actionDistribution = [
+    {
+      key: "work_now",
+      label: "Work Now",
+      count: results.filter(
+        (item) => item.recommended_action === "work_now"
+      ).length,
+      bar: "bg-emerald-500",
+      badge: "bg-emerald-50 text-emerald-700",
+    },
+    {
+      key: "continue_opportunity",
+      label: "Continue Opportunity",
+      count: results.filter(
+        (item) =>
+          item.recommended_action === "continue_opportunity"
+      ).length,
+      bar: "bg-blue-500",
+      badge: "bg-blue-50 text-blue-700",
+    },
+    {
+      key: "expansion",
+      label: "Expansion",
+      count: results.filter(
+        (item) => item.recommended_action === "expansion"
+      ).length,
+      bar: "bg-violet-500",
+      badge: "bg-violet-50 text-violet-700",
+    },
+    {
+      key: "follow_up_existing",
+      label: "Follow Up Existing",
+      count: results.filter(
+        (item) =>
+          item.recommended_action === "follow_up_existing"
+      ).length,
+      bar: "bg-cyan-500",
+      badge: "bg-cyan-50 text-cyan-700",
+    },
+    {
+      key: "research_first",
+      label: "Research First",
+      count: results.filter(
+        (item) => item.recommended_action === "research_first"
+      ).length,
+      bar: "bg-amber-500",
+      badge: "bg-amber-50 text-amber-700",
+    },
+    {
+      key: "nurture",
+      label: "Nurture",
+      count: results.filter(
+        (item) => item.recommended_action === "nurture"
+      ).length,
+      bar: "bg-fuchsia-500",
+      badge: "bg-fuchsia-50 text-fuchsia-700",
+    },
+    {
+      key: "pause_outreach",
+      label: "Pause Outreach",
+      count: results.filter(
+        (item) => item.recommended_action === "pause_outreach"
+      ).length,
+      bar: "bg-orange-500",
+      badge: "bg-orange-50 text-orange-700",
+    },
+    {
+      key: "deprioritize",
+      label: "Deprioritize",
+      count: results.filter(
+        (item) => item.recommended_action === "deprioritize"
+      ).length,
+      bar: "bg-slate-400",
+      badge: "bg-slate-100 text-slate-600",
+    },
+  ].filter((item) => item.count > 0);
+
+  const maxActionCount = Math.max(
+    ...actionDistribution.map((item) => item.count),
+    1
+  );
+
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <div>
-            <h1 className="text-xl font-semibold text-slate-950">
-              GTM Decision Engine
-            </h1>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-indigo-200">
+                G
+              </div>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Turn account data into clear sales priorities.
-            </p>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                  GTM Decision Engine
+                </h1>
+
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Know which accounts to work now, why, and what to do next.
+                </p>
+              </div>
+            </div>
           </div>
 
 
@@ -370,7 +460,7 @@ export default function Home() {
             <button
               onClick={handleDemo}
               disabled={runningDemo}
-              className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-200 transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {runningDemo
                 ? "Running..."
@@ -424,16 +514,34 @@ export default function Home() {
                 )}
               </div>
 
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-                Account Priority Overview
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                Sales Priority Overview
               </h2>
 
-              <p className="mt-2 text-sm text-slate-500">
-                {formatDate(
-                  analysis.created_at
-                )}{" "}
-                · Click an account to inspect its recommendation.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                Ranked company and CRM account records with next-best actions,
+                buying signals, CRM context, and data-quality checks.
               </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span>
+                  {formatDate(
+                    analysis.created_at
+                  )}
+                </span>
+
+                <span>•</span>
+
+                <span>
+                  Account = company or organization in the CRM
+                </span>
+
+                <span>•</span>
+
+                <span>
+                  Click any account for the full decision
+                </span>
+              </div>
             </div>
 
 
@@ -447,27 +555,101 @@ export default function Home() {
               <MetricCard
                 label="Accounts analyzed"
                 value={results.length}
+                detail="Company / CRM records"
+                tone="indigo"
               />
 
               <MetricCard
                 label="High account score"
                 value={highPriority}
+                detail="Strong evidence score"
+                tone="violet"
               />
 
               <MetricCard
                 label="Work now"
                 value={workNow}
+                detail="Immediate sales action"
+                tone="emerald"
               />
 
               <MetricCard
                 label="Potential duplicate groups"
                 value={duplicateGroups}
                 detail={`${duplicateAccounts} account records affected`}
+                tone="amber"
               />
             </section>
 
 
-            <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <section className="mt-8 rounded-2xl border border-slate-200/80 bg-white/95 p-6 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">
+                    Sales Actions
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-semibold text-slate-950">
+                    Action Distribution
+                  </h3>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    How the decision engine recommends sales should handle the analyzed accounts.
+                  </p>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  {results.length} accounts analyzed
+                </p>
+              </div>
+
+              <div className="mt-7 space-y-5">
+                {actionDistribution.map((item) => {
+                  const percentage = results.length
+                    ? Math.round(
+                        (item.count / results.length) * 100
+                      )
+                    : 0;
+
+                  const width = results.length
+                    ? (item.count / results.length) * 100
+                    : 0;
+
+                  return (
+                    <div key={item.key}>
+                      <div className="mb-2 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.badge}`}
+                          >
+                            {item.label}
+                          </span>
+
+                          <span className="text-xs text-slate-400">
+                            {percentage}%
+                          </span>
+                        </div>
+
+                        <span className="text-sm font-semibold text-slate-700">
+                          {item.count}
+                        </span>
+                      </div>
+
+                      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${item.bar}`}
+                          style={{
+                            width: `${width}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm">
               <div className="border-b border-slate-200 px-6 py-5">
                 <div className="flex flex-col gap-5">
                   <div>
@@ -554,14 +736,18 @@ export default function Home() {
                               result
                             )
                           }
-                          className="cursor-pointer transition hover:bg-slate-50"
+                          className="group cursor-pointer transition hover:bg-indigo-50/40"
                         >
-                          <td className="px-6 py-5 font-medium text-slate-500">
+                          <td
+                            className={`border-l-4 px-6 py-5 font-medium text-slate-500 ${actionBorderClass(
+                              result.recommended_action
+                            )}`}
+                          >
                             #{result.rank}
                           </td>
 
                           <td className="px-6 py-5">
-                            <div className="font-semibold text-slate-900">
+                            <div className="font-semibold text-slate-950 transition group-hover:text-indigo-700">
                               {
                                 result.company
                                   .name
@@ -575,7 +761,7 @@ export default function Home() {
                             </div>
 
                             {result.potential_duplicate && (
-                              <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                              <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
                                 Potential Duplicate ·{" "}
                                 {result.duplicate_group_size} records
                               </span>
@@ -590,10 +776,11 @@ export default function Home() {
                             />
                           </td>
 
-                          <td className="px-6 py-5 text-slate-700">
-                            {result.fit_level === "not_configured"
-                              ? "—"
-                              : result.icp_score}
+                          <td className="px-6 py-5">
+                            <IcpBadge
+                              score={result.icp_score}
+                              fitLevel={result.fit_level}
+                            />
                           </td>
 
                           <td className="px-6 py-5 text-slate-700">
@@ -603,11 +790,11 @@ export default function Home() {
                           </td>
 
                           <td className="px-6 py-5">
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                              {formatAction(
+                            <CrmBadge
+                              status={
                                 result.crm_status
-                              )}
-                            </span>
+                              }
+                            />
                           </td>
 
                           <td className="px-6 py-5">
@@ -699,27 +886,109 @@ function MetricCard({
   label,
   value,
   detail,
+  tone = "indigo",
 }: {
   label: string;
   value: number;
   detail?: string;
+  tone?: "indigo" | "violet" | "emerald" | "amber";
 }) {
+  const styles = {
+    indigo: {
+      card: "border-indigo-100 bg-gradient-to-br from-white to-indigo-50/80",
+      label: "text-indigo-500",
+      value: "text-indigo-950",
+      accent: "bg-indigo-500",
+    },
+    violet: {
+      card: "border-violet-100 bg-gradient-to-br from-white to-violet-50/80",
+      label: "text-violet-500",
+      value: "text-violet-950",
+      accent: "bg-violet-500",
+    },
+    emerald: {
+      card: "border-emerald-100 bg-gradient-to-br from-white to-emerald-50/80",
+      label: "text-emerald-600",
+      value: "text-emerald-950",
+      accent: "bg-emerald-500",
+    },
+    amber: {
+      card: "border-amber-100 bg-gradient-to-br from-white to-amber-50/80",
+      label: "text-amber-600",
+      value: "text-amber-950",
+      accent: "bg-amber-500",
+    },
+  };
+
+  const selected = styles[tone];
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
-      <p className="text-sm font-medium text-slate-500">
+    <div
+      className={`group relative overflow-hidden rounded-2xl border p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected.card}`}
+    >
+      <div
+        className={`absolute left-0 top-0 h-1 w-full ${selected.accent}`}
+      />
+
+      <p
+        className={`text-xs font-semibold uppercase tracking-[0.14em] ${selected.label}`}
+      >
         {label}
       </p>
 
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+      <p
+        className={`mt-4 text-3xl font-semibold tracking-tight ${selected.value}`}
+      >
         {value}
       </p>
 
       {detail && (
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs leading-5 text-slate-500">
           {detail}
         </p>
       )}
     </div>
+  );
+}
+
+
+function IcpBadge({
+  score,
+  fitLevel,
+}: {
+  score: number;
+  fitLevel: string;
+}) {
+  if (fitLevel === "not_configured") {
+    return (
+      <span className="text-slate-400">
+        —
+      </span>
+    );
+  }
+
+  let label = "Low Fit";
+  let classes =
+    "bg-red-50 text-red-700 ring-red-200";
+
+  if (fitLevel === "high") {
+    label = "High Fit";
+    classes =
+      "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  } else if (fitLevel === "medium") {
+    label = "Medium Fit";
+    classes =
+      "bg-amber-50 text-amber-700 ring-amber-200";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${classes}`}
+    >
+      <span>{score}</span>
+      <span>·</span>
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -745,6 +1014,84 @@ function ScoreBadge({
       className={`inline-flex min-w-12 justify-center rounded-full px-3 py-1 font-semibold ${classes}`}
     >
       {score}
+    </span>
+  );
+}
+
+
+function actionBorderClass(
+  action: string
+) {
+  if (action === "work_now") {
+    return "border-emerald-500";
+  }
+
+  if (action === "continue_opportunity") {
+    return "border-blue-500";
+  }
+
+  if (action === "expansion") {
+    return "border-violet-500";
+  }
+
+  if (action === "follow_up_existing") {
+    return "border-cyan-500";
+  }
+
+  if (action === "research_first") {
+    return "border-amber-500";
+  }
+
+  if (action === "nurture") {
+    return "border-fuchsia-400";
+  }
+
+  if (action === "pause_outreach") {
+    return "border-orange-400";
+  }
+
+  return "border-slate-300";
+}
+
+
+function CrmBadge({
+  status,
+}: {
+  status: string;
+}) {
+  let classes =
+    "bg-slate-100 text-slate-700 ring-slate-200";
+
+  if (status === "existing_customer") {
+    classes =
+      "bg-violet-50 text-violet-700 ring-violet-200";
+  } else if (
+    status === "open_opportunity"
+  ) {
+    classes =
+      "bg-blue-50 text-blue-700 ring-blue-200";
+  } else if (
+    status === "existing_lead"
+  ) {
+    classes =
+      "bg-cyan-50 text-cyan-700 ring-cyan-200";
+  } else if (
+    status === "recently_contacted"
+  ) {
+    classes =
+      "bg-orange-50 text-orange-700 ring-orange-200";
+  } else if (
+    status === "new_prospect"
+  ) {
+    classes =
+      "bg-slate-50 text-slate-600 ring-slate-200";
+  }
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ring-1 ${classes}`}
+    >
+      {formatAction(status)}
     </span>
   );
 }

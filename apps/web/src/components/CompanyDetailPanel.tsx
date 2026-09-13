@@ -84,7 +84,13 @@ export default function CompanyDetailPanel({
                 value={
                   result.fit_level === "not_configured"
                     ? "Not configured"
-                    : result.icp_score
+                    : `${result.icp_score} · ${
+                        result.fit_level === "high"
+                          ? "High Fit"
+                          : result.fit_level === "medium"
+                            ? "Medium Fit"
+                            : "Low Fit"
+                      }`
                 }
               />
 
