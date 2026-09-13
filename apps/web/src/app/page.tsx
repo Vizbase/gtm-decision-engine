@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import AnalysisHistoryPanel from "@/components/AnalysisHistoryPanel";
 import CompanyDetailPanel from "@/components/CompanyDetailPanel";
 import CsvUploadPanel from "@/components/CsvUploadPanel";
 
 import {
   AnalysisRunDetail,
+  AnalysisRunSummary,
   StoredAnalysisResult,
   getAnalysisRun,
   getAnalysisRuns,
@@ -25,9 +27,20 @@ function formatAction(value: string) {
 }
 
 
+function formatDate(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+
 export default function Home() {
   const [analysis, setAnalysis] =
     useState<AnalysisRunDetail | null>(null);
+
+  const [history, setHistory] =
+    useState<AnalysisRunSummary[]>([]);
 
   const [selectedResult, setSelectedResult] =
     useState<StoredAnalysisResult | null>(null);
@@ -37,27 +50,35 @@ export default function Home() {
   const [runningDemo, setRunningDemo] =
     useState(false);
 
+  const [loadingRunId, setLoadingRunId] =
+    useState<string | null>(null);
+
   const [showUpload, setShowUpload] =
+    useState(false);
+
+  const [showHistory, setShowHistory] =
     useState(false);
 
   const [error, setError] =
     useState<string | null>(null);
 
 
-  async function loadLatestAnalysis() {
-    const history = await getAnalysisRuns();
+  async function refreshHistory() {
+    const historyData = await getAnalysisRuns();
+    setHistory(historyData.runs);
+    return historyData.runs;
+  }
 
-    if (!history.runs.length) {
+
+  async function loadLatestAnalysis() {
+    const runs = await refreshHistory();
+
+    if (!runs.length) {
       setAnalysis(null);
       return;
     }
 
-    const latestRun = history.runs[0];
-
-    const detail = await getAnalysisRun(
-      latestRun.id
-    );
-
+    const detail = await getAnalysisRun(runs[0].id);
     setAnalysis(detail);
   }
 
@@ -92,12 +113,33 @@ export default function Home() {
       );
 
       setAnalysis(detail);
+      await refreshHistory();
     } catch {
       setError(
         "The demo analysis could not be completed."
       );
     } finally {
       setRunningDemo(false);
+    }
+  }
+
+
+  async function handleHistorySelect(runId: string) {
+    setLoadingRunId(runId);
+    setError(null);
+
+    try {
+      const detail = await getAnalysisRun(runId);
+
+      setAnalysis(detail);
+      setSelectedResult(null);
+      setShowHistory(false);
+    } catch {
+      setError(
+        "The saved analysis could not be loaded."
+      );
+    } finally {
+      setLoadingRunId(null);
     }
   }
 
@@ -130,6 +172,13 @@ export default function Home() {
 
 
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowHistory(true)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              History
+            </button>
+
             <button
               onClick={() => setShowUpload(true)}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -191,7 +240,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                Click an account to see why it received its recommendation.
+                {formatDate(analysis.created_at)} · Click an account to inspect its recommendation.
               </p>
             </div>
 
@@ -328,11 +377,23 @@ export default function Home() {
       {showUpload && (
         <CsvUploadPanel
           onClose={() => setShowUpload(false)}
-          onAnalysisComplete={(newAnalysis) => {
+          onAnalysisComplete={async (newAnalysis) => {
             setAnalysis(newAnalysis);
             setSelectedResult(null);
             setError(null);
+            await refreshHistory();
           }}
+        />
+      )}
+
+
+      {showHistory && (
+        <AnalysisHistoryPanel
+          runs={history}
+          activeRunId={analysis?.id ?? null}
+          loadingRunId={loadingRunId}
+          onSelect={handleHistorySelect}
+          onClose={() => setShowHistory(false)}
         />
       )}
 

@@ -13,6 +13,14 @@ export type Company = {
 };
 
 
+export type AnalysisRunSummary = {
+  id: string;
+  workspace_name: string;
+  total_companies: number;
+  created_at: string;
+};
+
+
 export type StoredAnalysisResult = {
   company: Company;
 
@@ -67,7 +75,10 @@ export type ICPInput = {
 };
 
 
-export async function getAnalysisRuns() {
+export async function getAnalysisRuns(): Promise<{
+  total_runs: number;
+  runs: AnalysisRunSummary[];
+}> {
   const response = await fetch(
     `${API_URL}/analysis/runs?limit=20`
   );
