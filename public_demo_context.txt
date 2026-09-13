@@ -1,21 +1,20 @@
+--- CSV UPLOAD PANEL ---
 "use client";
 
 import {
   ChangeEvent,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 
 import ColumnMappingPanel from "@/components/ColumnMappingPanel";
-import type { DemoSample } from "@/components/DemoDatasetPicker";
 
 import {
-  AnalysisRunDetail,
   ColumnMapping,
   Company,
   CRMContext,
+  getAnalysisRun,
   ICPInput,
   runAnalysis,
   uploadCompaniesCsv,
@@ -24,10 +23,11 @@ import {
 
 type Props = {
   onClose: () => void;
-  initialSample?: DemoSample | null;
 
   onAnalysisComplete: (
-    analysis: AnalysisRunDetail
+    analysis: Awaited<
+      ReturnType<typeof getAnalysisRun>
+    >
   ) => void;
 };
 
@@ -54,26 +54,6 @@ function uniqueValues(
 }
 
 
-function crmContextKey(
-  company: Company
-) {
-  const name = company.name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-
-  if (company.domain) {
-    return `${company.domain.toLowerCase()}::${name}`;
-  }
-
-  if (company.website) {
-    return `${company.website.toLowerCase()}::${name}`;
-  }
-
-  return `name::${name}`;
-}
-
-
 function formatStatus(
   value: string
 ) {
@@ -91,13 +71,9 @@ function formatStatus(
 export default function CsvUploadPanel({
   onClose,
   onAnalysisComplete,
-  initialSample = null,
 }: Props) {
   const fileInputRef =
     useRef<HTMLInputElement>(null);
-
-  const loadedSampleRef =
-    useRef<string | null>(null);
 
   const [
     uploadedFile,
@@ -246,9 +222,17 @@ export default function CsvUploadPanel({
   }
 
 
-  async function importCsvFile(
-    file: File
+  async function handleFile(
+    event:
+      ChangeEvent<HTMLInputElement>
   ) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
     setLoadingFile(true);
     setError(null);
 
@@ -289,76 +273,6 @@ export default function CsvUploadPanel({
     }
   }
 
-
-  async function handleFile(
-    event:
-      ChangeEvent<HTMLInputElement>
-  ) {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    await importCsvFile(file);
-  }
-
-
-  useEffect(() => {
-    if (
-      !initialSample ||
-      loadedSampleRef.current ===
-        initialSample.url
-    ) {
-      return;
-    }
-
-    loadedSampleRef.current =
-      initialSample.url;
-
-    async function loadSample() {
-      setLoadingFile(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          initialSample!.url
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            "Sample file unavailable"
-          );
-        }
-
-        const blob =
-          await response.blob();
-
-        const file = new File(
-          [blob],
-          initialSample!.filename,
-          {
-            type: "text/csv",
-          }
-        );
-
-        await importCsvFile(file);
-
-      } catch {
-        setLoadingFile(false);
-
-        setError(
-          "Could not load this sample dataset."
-        );
-      }
-    }
-
-    loadSample();
-
-    // initialSample is intentionally the trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSample]);
 
   function handleMappingChange(
     field: string,
@@ -522,39 +436,18 @@ export default function CsvUploadPanel({
     setError(null);
 
     try {
-      const workspaceName =
-        initialSample
-          ? `Sample · ${initialSample.title}`
-          : `Temporary CSV · ${
-              fileName ||
-              "Uploaded file"
-            }`;
-
       const result =
         await runAnalysis(
           companies,
           icp,
-          workspaceName,
-          crmContexts,
-          false,
-          initialSample
-            ? "sample"
-            : "live",
-          initialSample?.id ?? null
+          "CSV Workspace",
+          crmContexts
         );
 
-      const detail: AnalysisRunDetail = {
-        id: `temporary-${Date.now()}`,
-        workspace_name:
-          workspaceName,
-        created_at:
-          new Date().toISOString(),
-        icp,
-        total_companies:
-          result.total_companies,
-        results:
-          result.results,
-      };
+      const detail =
+        await getAnalysisRun(
+          result.analysis_run_id
+        );
 
       onAnalysisComplete(
         detail
@@ -588,19 +481,6 @@ export default function CsvUploadPanel({
             <p className="mt-1 text-sm text-slate-500">
               Map your CSV structure, preserve CRM context, and rank every account.
             </p>
-
-            {initialSample && (
-              <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
-                <p className="text-xs font-semibold text-indigo-700">
-                  Loaded sample: {initialSample.title}
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-indigo-600">
-                  Built-in samples use deterministic synthetic
-                  signal snapshots so the demo stays stable.
-                </p>
-              </div>
-            )}
           </div>
 
           <button
@@ -777,7 +657,7 @@ export default function CsvUploadPanel({
                         (
                           company
                         ) => {
-                          const fallbackKey =
+                          const key =
                             (
                               company.domain ||
                               company.website ||
@@ -786,12 +666,7 @@ export default function CsvUploadPanel({
 
                           const crm =
                             crmContexts[
-                              crmContextKey(
-                                company
-                              )
-                            ] ??
-                            crmContexts[
-                              fallbackKey
+                              key
                             ];
 
                           return (
@@ -1051,11 +926,6 @@ export default function CsvUploadPanel({
         </div>
 
 
-        <div className="border-t border-slate-100 bg-emerald-50/50 px-6 py-3 text-xs leading-5 text-emerald-800">
-          Privacy: this analysis is temporary and is not
-          added to shared Supabase history.
-        </div>
-
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-5">
 
           <p className="hidden text-xs text-slate-400 sm:block">
@@ -1267,3 +1137,940 @@ function NumberField({
     </label>
   );
 }
+
+--- FRONTEND API ---
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
+
+
+export type Company = {
+  name: string;
+  domain?: string | null;
+  website: string | null;
+  country: string | null;
+  industry: string | null;
+  employee_count: number | null;
+  linkedin_url: string | null;
+};
+
+
+export type CRMContext = {
+  status:
+    | "new_prospect"
+    | "existing_lead"
+    | "existing_customer"
+    | "open_opportunity"
+    | "recently_contacted";
+
+  owner: string | null;
+  opportunity_stage: string | null;
+  days_since_last_contact: number | null;
+  source: string;
+};
+
+
+export type ColumnMapping = Record<string, string>;
+
+
+export type AnalysisRunSummary = {
+  id: string;
+  workspace_name: string;
+  total_companies: number;
+  created_at: string;
+};
+
+
+export type StoredAnalysisResult = {
+  company: Company;
+
+  rank: number;
+  icp_score: number;
+  signal_score: number;
+  priority_score: number;
+  data_confidence: number;
+
+  fit_level: string;
+  signal_level: string;
+  priority_level: string;
+  confidence_level: string;
+
+  crm_status: string;
+  crm_source: string;
+
+  potential_duplicate: boolean;
+  duplicate_group_size: number;
+  duplicate_account_names: string[];
+
+  recommended_action: string;
+  action_reason: string;
+
+  reasons: string[];
+  signal_reasons: string[];
+  confidence_reasons: string[];
+
+  enrichment: {
+    reachable?: boolean;
+    title?: string | null;
+    description?: string | null;
+    detected_technologies?: string[];
+    signal_keywords?: string[];
+    hiring_signal?: boolean;
+    error?: string | null;
+  };
+};
+
+
+export type AnalysisRunDetail = {
+  id: string;
+  workspace_name: string;
+  created_at: string;
+  icp: Record<string, unknown>;
+  total_companies: number;
+  results: StoredAnalysisResult[];
+};
+
+
+export type ICPInput = {
+  target_countries: string[];
+  target_industries: string[];
+  min_employees: number | null;
+  max_employees: number | null;
+};
+
+
+export type CsvImportResponse = {
+  filename: string;
+  headers: string[];
+  detected_mapping: ColumnMapping;
+  applied_mapping: ColumnMapping;
+  available_fields: string[];
+
+  imported_count: number;
+  detected_crm_count: number;
+
+  companies: Company[];
+  crm_contexts: Record<string, CRMContext>;
+};
+
+
+export async function getAnalysisRuns(): Promise<{
+  total_runs: number;
+  runs: AnalysisRunSummary[];
+}> {
+  const response = await fetch(
+    `${API_URL}/analysis/runs?limit=20`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Could not load analysis runs"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function getAnalysisRun(
+  runId: string
+): Promise<AnalysisRunDetail> {
+  const response = await fetch(
+    `${API_URL}/analysis/runs/${runId}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Could not load analysis run"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function uploadCompaniesCsv(
+  file: File,
+  mapping?: ColumnMapping
+): Promise<CsvImportResponse> {
+  const formData = new FormData();
+
+  formData.append(
+    "file",
+    file
+  );
+
+  if (mapping) {
+    formData.append(
+      "column_mapping",
+      JSON.stringify(mapping)
+    );
+  }
+
+  const response = await fetch(
+    `${API_URL}/companies/import`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "CSV import failed"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function runAnalysis(
+  companies: Company[],
+  icp: ICPInput,
+  workspaceName = "CSV Workspace",
+  crmContexts: Record<
+    string,
+    CRMContext
+  > = {}
+) {
+  const cleanCompanies =
+    companies.map(
+      (company) => ({
+        name: company.name,
+        website: company.website,
+        country: company.country,
+        industry: company.industry,
+        employee_count:
+          company.employee_count,
+        linkedin_url:
+          company.linkedin_url,
+      })
+    );
+
+  const response = await fetch(
+    `${API_URL}/analysis/run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        workspace_name:
+          workspaceName,
+        companies:
+          cleanCompanies,
+        icp,
+        crm_contexts:
+          crmContexts,
+        use_website_enrichment:
+          true,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Analysis failed"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function runDemoAnalysis() {
+  const response = await fetch(
+    `${API_URL}/analysis/demo`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Demo analysis failed"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function checkBackendHealth() {
+  const response = await fetch(
+    `${API_URL}/health`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Backend is not available"
+    );
+  }
+
+  return response.json();
+}
+
+
+export { API_URL };
+
+--- ANALYSIS API ---
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from services.api.app.core.database import get_db
+from services.api.app.integrations.crm.demo_provider import (
+    DemoCRMProvider,
+)
+from services.api.app.integrations.enrichment.demo_snapshot_provider import (
+    DemoSnapshotEnrichmentProvider,
+)
+from services.api.app.integrations.enrichment.website_provider import (
+    WebsiteEnrichmentProvider,
+)
+from services.api.app.repositories.analysis_repository import (
+    AnalysisRepository,
+)
+from services.api.app.schemas.analysis import (
+    AnalysisRequest,
+    AnalysisResponse,
+    AnalysisRunDetail,
+    AnalysisRunListResponse,
+    AnalysisRunSummary,
+    StoredAnalysisResult,
+)
+from services.api.app.schemas.company import (
+    CompanyInput,
+    CompanyNormalized,
+)
+from services.api.app.schemas.scoring import ICPProfile
+from services.api.app.services.analysis_pipeline import (
+    AnalysisPipeline,
+)
+
+
+router = APIRouter(
+    prefix="/analysis",
+    tags=["Analysis"],
+)
+
+
+live_analysis_pipeline = AnalysisPipeline(
+    crm_provider=DemoCRMProvider(),
+    enrichment_provider=WebsiteEnrichmentProvider(),
+)
+
+
+demo_analysis_pipeline = AnalysisPipeline(
+    crm_provider=DemoCRMProvider(),
+    enrichment_provider=DemoSnapshotEnrichmentProvider(),
+)
+
+
+DEMO_ICP = ICPProfile(
+    target_countries=[
+        "Germany",
+        "Netherlands",
+        "United States",
+    ],
+    target_industries=[
+        "Software",
+        "SaaS",
+        "Artificial Intelligence",
+    ],
+    min_employees=50,
+    max_employees=10000,
+)
+
+
+DEMO_COMPANIES = [
+    CompanyInput(
+        name="HubSpot",
+        website="https://www.hubspot.com",
+        country="United States",
+        industry="Software",
+        employee_count=8000,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Acme GmbH",
+        website="https://acme.com",
+        country="Germany",
+        industry="Software",
+        employee_count=120,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Nova AI",
+        website="https://nova.ai",
+        country="Netherlands",
+        industry="Artificial Intelligence",
+        employee_count=75,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Example Systems",
+        website="https://example.com",
+        country="Germany",
+        industry="SaaS",
+        employee_count=300,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="SignalCraft",
+        website="https://signalcraft.example",
+        country="Germany",
+        industry="Software",
+        employee_count=180,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="BluePeak SaaS",
+        website="https://bluepeak.example",
+        country="France",
+        industry="SaaS",
+        employee_count=240,
+        linkedin_url=None,
+    ),
+    CompanyInput(
+        name="Legacy Manufacturing Group",
+        website="https://legacy.example",
+        country="Spain",
+        industry="Manufacturing",
+        employee_count=25000,
+        linkedin_url=None,
+    ),
+]
+
+
+@router.post(
+    "/run",
+    response_model=AnalysisResponse,
+)
+async def run_analysis(
+    request: AnalysisRequest,
+    db: Session = Depends(get_db),
+):
+    results = await live_analysis_pipeline.run(
+        companies=request.companies,
+        icp=request.icp,
+        use_website_enrichment=(
+            request.use_website_enrichment
+        ),
+        crm_contexts=request.crm_contexts,
+    )
+
+    repository = AnalysisRepository(db)
+
+    analysis_run = repository.save_analysis(
+        workspace_name=request.workspace_name,
+        icp=request.icp,
+        results=results,
+    )
+
+    return AnalysisResponse(
+        analysis_run_id=analysis_run.id,
+        total_companies=len(results),
+        results=results,
+    )
+
+
+@router.post(
+    "/demo",
+    response_model=AnalysisResponse,
+)
+async def run_demo_analysis(
+    db: Session = Depends(get_db),
+):
+    results = await demo_analysis_pipeline.run(
+        companies=DEMO_COMPANIES,
+        icp=DEMO_ICP,
+        use_website_enrichment=True,
+    )
+
+    repository = AnalysisRepository(db)
+
+    analysis_run = repository.save_analysis(
+        workspace_name="Demo Workspace",
+        icp=DEMO_ICP,
+        results=results,
+    )
+
+    return AnalysisResponse(
+        analysis_run_id=analysis_run.id,
+        total_companies=len(results),
+        results=results,
+    )
+
+
+@router.get(
+    "/runs",
+    response_model=AnalysisRunListResponse,
+)
+def list_analysis_runs(
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+    ),
+    db: Session = Depends(get_db),
+):
+    repository = AnalysisRepository(db)
+
+    rows = repository.list_analysis_runs(
+        limit=limit
+    )
+
+    runs = [
+        AnalysisRunSummary(
+            id=analysis_run.id,
+            workspace_name=workspace_name,
+            total_companies=total_companies,
+            created_at=analysis_run.created_at,
+        )
+        for analysis_run, workspace_name, total_companies in rows
+    ]
+
+    return AnalysisRunListResponse(
+        total_runs=len(runs),
+        runs=runs,
+    )
+
+
+@router.get(
+    "/runs/{run_id}",
+    response_model=AnalysisRunDetail,
+)
+def get_analysis_run(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+):
+    repository = AnalysisRepository(db)
+
+    stored = repository.get_analysis_run(
+        run_id=run_id
+    )
+
+    if not stored:
+        raise HTTPException(
+            status_code=404,
+            detail="Analysis run not found.",
+        )
+
+    run_row, result_rows = stored
+
+    analysis_run, workspace_name = run_row
+
+    results = []
+
+    for result, company in result_rows:
+        details = result.details or {}
+
+        results.append(
+            StoredAnalysisResult(
+                company=CompanyNormalized(
+                    name=company.name,
+                    domain=company.domain,
+                    website=company.website,
+                    country=company.country,
+                    industry=company.industry,
+                    employee_count=company.employee_count,
+                    linkedin_url=company.linkedin_url,
+                ),
+                rank=result.rank,
+                icp_score=result.icp_score,
+                signal_score=result.signal_score,
+                priority_score=result.priority_score,
+                data_confidence=result.data_confidence,
+                fit_level=details.get(
+                    "fit_level",
+                    "unknown",
+                ),
+                signal_level=details.get(
+                    "signal_level",
+                    "unknown",
+                ),
+                priority_level=details.get(
+                    "priority_level",
+                    "unknown",
+                ),
+                confidence_level=details.get(
+                    "confidence_level",
+                    "unknown",
+                ),
+                crm_status=result.crm_status,
+                crm_source=details.get(
+                    "crm_source",
+                    "unknown",
+                ),
+                potential_duplicate=details.get(
+                    "potential_duplicate",
+                    False,
+                ),
+                duplicate_group_size=details.get(
+                    "duplicate_group_size",
+                    1,
+                ),
+                duplicate_account_names=details.get(
+                    "duplicate_account_names",
+                    [],
+                ),
+                recommended_action=(
+                    result.recommended_action
+                ),
+                action_reason=result.action_reason,
+                reasons=details.get(
+                    "reasons",
+                    [],
+                ),
+                signal_reasons=details.get(
+                    "signal_reasons",
+                    [],
+                ),
+                confidence_reasons=details.get(
+                    "confidence_reasons",
+                    [],
+                ),
+                enrichment=result.enrichment or {},
+            )
+        )
+
+    return AnalysisRunDetail(
+        id=analysis_run.id,
+        workspace_name=workspace_name,
+        created_at=analysis_run.created_at,
+        icp=analysis_run.icp_config,
+        total_companies=len(results),
+        results=results,
+    )
+
+--- ANALYSIS SCHEMA ---
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+from pydantic import (
+    BaseModel,
+    Field,
+)
+
+from services.api.app.schemas.company import (
+    CompanyInput,
+    CompanyNormalized,
+)
+from services.api.app.schemas.crm import (
+    CRMContext,
+)
+from services.api.app.schemas.enrichment import (
+    WebsiteEnrichment,
+)
+from services.api.app.schemas.scoring import (
+    CompanyScore,
+    ICPProfile,
+)
+
+
+class AnalysisRequest(BaseModel):
+    companies: list[CompanyInput]
+
+    icp: ICPProfile = Field(
+        default_factory=ICPProfile
+    )
+
+    crm_contexts: dict[
+        str,
+        CRMContext
+    ] = Field(
+        default_factory=dict
+    )
+
+    workspace_name: str = (
+        "Demo Workspace"
+    )
+
+    use_website_enrichment: bool = True
+
+
+class CompanyAnalysisResult(
+    CompanyScore
+):
+    rank: int
+    enrichment: WebsiteEnrichment
+
+    potential_duplicate: bool = False
+    duplicate_group_size: int = 1
+    duplicate_account_names: list[str] = Field(
+        default_factory=list
+    )
+
+
+class AnalysisResponse(BaseModel):
+    analysis_run_id: Optional[
+        UUID
+    ] = None
+
+    total_companies: int
+
+    results: list[
+        CompanyAnalysisResult
+    ] = Field(
+        default_factory=list
+    )
+
+
+class AnalysisRunSummary(BaseModel):
+    id: UUID
+    workspace_name: str
+    total_companies: int
+    created_at: datetime
+
+
+class AnalysisRunListResponse(
+    BaseModel
+):
+    total_runs: int
+    runs: list[
+        AnalysisRunSummary
+    ]
+
+
+class StoredAnalysisResult(
+    BaseModel
+):
+    company: CompanyNormalized
+
+    rank: int
+    icp_score: int
+    signal_score: int
+    priority_score: int
+    data_confidence: int
+
+    fit_level: str
+    signal_level: str
+    priority_level: str
+    confidence_level: str
+
+    crm_status: str
+    crm_source: str
+
+    potential_duplicate: bool = False
+    duplicate_group_size: int = 1
+    duplicate_account_names: list[str] = Field(
+        default_factory=list
+    )
+
+    recommended_action: str
+    action_reason: str
+
+    reasons: list[str]
+    signal_reasons: list[str]
+    confidence_reasons: list[str]
+
+    enrichment: dict
+
+
+class AnalysisRunDetail(BaseModel):
+    id: UUID
+    workspace_name: str
+    created_at: datetime
+    icp: dict
+    total_companies: int
+
+    results: list[
+        StoredAnalysisResult
+    ]
+
+--- DEMO CRM PROVIDER ---
+import json
+from functools import lru_cache
+from pathlib import Path
+
+from services.api.app.integrations.crm.base import CRMProvider
+from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.crm import CRMContext
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+DEMO_CRM_PATH = PROJECT_ROOT / "data" / "sample" / "demo_crm.json"
+
+
+@lru_cache
+def load_demo_crm_records() -> dict:
+    with DEMO_CRM_PATH.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+class DemoCRMProvider(CRMProvider):
+    def get_context(self, company: CompanyNormalized) -> CRMContext:
+        if not company.domain:
+            return CRMContext(source="demo")
+
+        records = load_demo_crm_records()
+        record = records.get(company.domain.lower())
+
+        if not record:
+            return CRMContext(source="demo")
+
+        return CRMContext(
+            **record,
+            source="demo",
+        )
+
+--- DEMO ENRICHMENT PROVIDER ---
+from services.api.app.integrations.enrichment.base import (
+    EnrichmentProvider,
+)
+from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.enrichment import WebsiteEnrichment
+
+
+DEMO_SNAPSHOTS = {
+    "hubspot.com": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "HubSpot",
+        "description": (
+            "Customer platform with marketing, sales, "
+            "service, content, and operations software."
+        ),
+        "detected_technologies": [
+            "HubSpot",
+            "Google Analytics",
+            "Stripe",
+        ],
+        "signal_keywords": [
+            "careers",
+            "jobs",
+        ],
+        "hiring_signal": True,
+    },
+    "acme.com": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "Acme GmbH",
+        "description": (
+            "B2B software company expanding its "
+            "enterprise platform."
+        ),
+        "detected_technologies": [
+            "Salesforce",
+            "Stripe",
+        ],
+        "signal_keywords": [
+            "careers",
+        ],
+        "hiring_signal": True,
+    },
+    "nova.ai": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "Nova AI",
+        "description": (
+            "AI software company building automation "
+            "tools for business teams."
+        ),
+        "detected_technologies": [
+            "HubSpot",
+        ],
+        "signal_keywords": [],
+        "hiring_signal": False,
+    },
+    "example.com": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "Example Systems",
+        "description": (
+            "SaaS platform serving mid-market "
+            "operations teams."
+        ),
+        "detected_technologies": [
+            "HubSpot",
+            "Intercom",
+        ],
+        "signal_keywords": [
+            "jobs",
+        ],
+        "hiring_signal": True,
+    },
+    "signalcraft.example": {
+        "reachable": False,
+        "error": (
+            "Demo scenario: public website research "
+            "could not be verified."
+        ),
+    },
+    "bluepeak.example": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "BluePeak SaaS",
+        "description": (
+            "Workflow SaaS company selling to "
+            "European operations teams."
+        ),
+        "detected_technologies": [
+            "HubSpot",
+            "Intercom",
+            "Stripe",
+        ],
+        "signal_keywords": [
+            "careers",
+        ],
+        "hiring_signal": False,
+    },
+    "legacy.example": {
+        "reachable": True,
+        "status_code": 200,
+        "title": "Legacy Manufacturing Group",
+        "description": (
+            "Large industrial manufacturing company."
+        ),
+        "detected_technologies": [],
+        "signal_keywords": [],
+        "hiring_signal": False,
+    },
+}
+
+
+class DemoSnapshotEnrichmentProvider(
+    EnrichmentProvider
+):
+    async def enrich(
+        self,
+        company: CompanyNormalized,
+    ) -> WebsiteEnrichment:
+        domain = (
+            company.domain.lower()
+            if company.domain
+            else ""
+        )
+
+        snapshot = DEMO_SNAPSHOTS.get(domain)
+
+        if snapshot is None:
+            return WebsiteEnrichment(
+                source="demo_snapshot",
+                requested_url=company.website,
+                reachable=False,
+                error=(
+                    "No demo enrichment snapshot "
+                    "available."
+                ),
+            )
+
+        return WebsiteEnrichment(
+            source="demo_snapshot",
+            requested_url=company.website,
+            final_url=(
+                company.website
+                if snapshot.get("reachable")
+                else None
+            ),
+            **snapshot,
+        )
+
+--- SAMPLE FILES ---
+data/sample/companies.csv
+data/sample/demo_crm.json

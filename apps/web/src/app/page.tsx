@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import AnalysisHistoryPanel from "@/components/AnalysisHistoryPanel";
 import CompanyDetailPanel from "@/components/CompanyDetailPanel";
 import CsvUploadPanel from "@/components/CsvUploadPanel";
+import DemoDatasetPicker, {
+  DemoSample,
+} from "@/components/DemoDatasetPicker";
 import DecisionSummary from "@/components/DecisionSummary";
 import PriorityFilters, {
   PriorityFilter,
@@ -19,8 +22,7 @@ import {
   StoredAnalysisResult,
   getAnalysisRun,
   getAnalysisRuns,
-  runDemoAnalysis,
-} from "@/lib/api";
+ } from "@/lib/api";
 
 
 function formatAction(value: string) {
@@ -62,8 +64,11 @@ export default function Home() {
 
   const [loading, setLoading] = useState(true);
 
-  const [runningDemo, setRunningDemo] =
+  const [showDemoPicker, setShowDemoPicker] =
     useState(false);
+
+  const [selectedSample, setSelectedSample] =
+    useState<DemoSample | null>(null);
 
   const [loadingRunId, setLoadingRunId] =
     useState<string | null>(null);
@@ -125,32 +130,6 @@ export default function Home() {
 
     loadDashboard();
   }, []);
-
-
-  async function handleDemo() {
-    setRunningDemo(true);
-    setError(null);
-    setSelectedResult(null);
-    resetQueueControls();
-
-    try {
-      const result = await runDemoAnalysis();
-
-      const detail = await getAnalysisRun(
-        result.analysis_run_id
-      );
-
-      setAnalysis(detail);
-
-      await refreshHistory();
-    } catch {
-      setError(
-        "The demo analysis could not be completed."
-      );
-    } finally {
-      setRunningDemo(false);
-    }
-  }
 
 
   async function handleHistorySelect(
@@ -330,7 +309,10 @@ export default function Home() {
     ).size;
 
   const isDemo =
-    analysis?.workspace_name === "Demo Workspace";
+    analysis?.workspace_name === "Demo Workspace" ||
+    analysis?.workspace_name.startsWith(
+      "Sample ·"
+    ) === true;
 
   const actionDistribution = [
     {
@@ -449,22 +431,22 @@ export default function Home() {
             </button>
 
             <button
-              onClick={() =>
-                setShowUpload(true)
-              }
+              onClick={() => {
+                setSelectedSample(null);
+                setShowUpload(true);
+              }}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Upload CSV
             </button>
 
             <button
-              onClick={handleDemo}
-              disabled={runningDemo}
+              onClick={() =>
+                setShowDemoPicker(true)
+              }
               className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-200 transition hover:from-indigo-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {runningDemo
-                ? "Running..."
-                : "Try Demo"}
+              Try Demo
             </button>
           </div>
         </div>
@@ -835,11 +817,26 @@ export default function Home() {
       </div>
 
 
+      {showDemoPicker && (
+        <DemoDatasetPicker
+          onClose={() =>
+            setShowDemoPicker(false)
+          }
+          onSelect={(sample) => {
+            setSelectedSample(sample);
+            setShowDemoPicker(false);
+            setShowUpload(true);
+          }}
+        />
+      )}
+
       {showUpload && (
         <CsvUploadPanel
-          onClose={() =>
-            setShowUpload(false)
-          }
+          initialSample={selectedSample}
+          onClose={() => {
+            setShowUpload(false);
+            setSelectedSample(null);
+          }}
           onAnalysisComplete={async (
             newAnalysis
           ) => {
@@ -848,7 +845,7 @@ export default function Home() {
             resetQueueControls();
             setError(null);
 
-            await refreshHistory();
+
           }}
         />
       )}

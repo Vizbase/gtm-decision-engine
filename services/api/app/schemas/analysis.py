@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import (
@@ -42,6 +42,15 @@ class AnalysisRequest(BaseModel):
     )
 
     use_website_enrichment: bool = True
+
+    enrichment_mode: Literal[
+        "live",
+        "sample",
+    ] = "live"
+
+    sample_dataset_id: Optional[str] = None
+
+    persist: bool = True
 
 
 class CompanyAnalysisResult(

@@ -1,0 +1,752 @@
+--- ENRICHMENT SCHEMA ---
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+from services.api.app.schemas.company import CompanyNormalized
+
+
+class CompanyEnrichmentRequest(BaseModel):
+    company: CompanyNormalized
+
+
+class WebsiteEnrichment(BaseModel):
+    source: str = "website"
+
+    requested_url: Optional[str] = None
+    final_url: Optional[str] = None
+
+    reachable: bool = False
+    status_code: Optional[int] = None
+
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+    detected_technologies: list[str] = Field(default_factory=list)
+    signal_keywords: list[str] = Field(default_factory=list)
+
+    hiring_signal: bool = False
+
+    error: Optional[str] = None
+
+--- SIGNAL SCORING ---
+services/api/app/services/signal_scorer.py-1-from services.api.app.schemas.enrichment import WebsiteEnrichment
+services/api/app/services/signal_scorer.py-2-from services.api.app.schemas.signal import SignalScore
+services/api/app/services/signal_scorer.py-3-
+services/api/app/services/signal_scorer.py-4-
+services/api/app/services/signal_scorer.py:5:def calculate_signal_score(
+services/api/app/services/signal_scorer.py-6-    enrichment: WebsiteEnrichment | None,
+services/api/app/services/signal_scorer.py-7-) -> SignalScore:
+services/api/app/services/signal_scorer.py-8-    if enrichment is None:
+services/api/app/services/signal_scorer.py-9-        return SignalScore(
+services/api/app/services/signal_scorer.py-10-            score=0,
+services/api/app/services/signal_scorer.py-11-            level="unknown",
+services/api/app/services/signal_scorer.py-12-            reasons=["No enrichment data available"],
+services/api/app/services/signal_scorer.py-13-        )
+services/api/app/services/signal_scorer.py-14-
+services/api/app/services/signal_scorer.py-15-    if not enrichment.reachable:
+services/api/app/services/signal_scorer.py-16-        return SignalScore(
+services/api/app/services/signal_scorer.py-17-            score=0,
+services/api/app/services/signal_scorer.py-18-            level="unknown",
+services/api/app/services/signal_scorer.py-19-            reasons=["Website enrichment was not available"],
+services/api/app/services/signal_scorer.py-20-        )
+services/api/app/services/signal_scorer.py-21-
+services/api/app/services/signal_scorer.py-22-    score = 0
+services/api/app/services/signal_scorer.py-23-    reasons = []
+services/api/app/services/signal_scorer.py-24-
+services/api/app/services/signal_scorer.py-25-    # Strong timing signal
+services/api/app/services/signal_scorer.py-26-    if enrichment.hiring_signal:
+services/api/app/services/signal_scorer.py-27-        score += 50
+services/api/app/services/signal_scorer.py-28-        reasons.append("Active hiring signal detected")
+services/api/app/services/signal_scorer.py-29-
+services/api/app/services/signal_scorer.py-30-    # Technology signals: up to 30 points
+services/api/app/services/signal_scorer.py-31-    technology_points = min(
+services/api/app/services/signal_scorer.py-32-        len(enrichment.detected_technologies) * 10,
+services/api/app/services/signal_scorer.py-33-        30,
+services/api/app/services/signal_scorer.py-34-    )
+services/api/app/services/signal_scorer.py-35-
+services/api/app/services/signal_scorer.py-36-    if technology_points:
+services/api/app/services/signal_scorer.py-37-        score += technology_points
+services/api/app/services/signal_scorer.py-38-        reasons.append(
+services/api/app/services/signal_scorer.py-39-            f"{len(enrichment.detected_technologies)} technology signals detected"
+services/api/app/services/signal_scorer.py-40-        )
+services/api/app/services/signal_scorer.py-41-
+services/api/app/services/signal_scorer.py-42-    # Other website signals: up to 20 points
+services/api/app/services/signal_scorer.py-43-    keyword_points = min(
+services/api/app/services/signal_scorer.py-44-        len(enrichment.signal_keywords) * 10,
+services/api/app/services/signal_scorer.py-45-        20,
+services/api/app/services/signal_scorer.py-46-    )
+services/api/app/services/signal_scorer.py-47-
+services/api/app/services/signal_scorer.py-48-    if keyword_points:
+services/api/app/services/signal_scorer.py-49-        score += keyword_points
+services/api/app/services/signal_scorer.py-50-        reasons.append(
+services/api/app/services/signal_scorer.py-51-            f"{len(enrichment.signal_keywords)} business signals detected"
+services/api/app/services/signal_scorer.py-52-        )
+services/api/app/services/signal_scorer.py-53-
+services/api/app/services/signal_scorer.py-54-    score = min(score, 100)
+services/api/app/services/signal_scorer.py-55-
+services/api/app/services/signal_scorer.py-56-    if score >= 70:
+services/api/app/services/signal_scorer.py-57-        level = "high"
+services/api/app/services/signal_scorer.py-58-    elif score >= 40:
+services/api/app/services/signal_scorer.py-59-        level = "medium"
+services/api/app/services/signal_scorer.py-60-    else:
+services/api/app/services/signal_scorer.py-61-        level = "low"
+services/api/app/services/signal_scorer.py-62-
+services/api/app/services/signal_scorer.py-63-    if not reasons:
+services/api/app/services/signal_scorer.py-64-        reasons.append("No strong timing signals detected")
+services/api/app/services/signal_scorer.py-65-
+services/api/app/services/signal_scorer.py-66-    return SignalScore(
+services/api/app/services/signal_scorer.py-67-        score=score,
+services/api/app/services/signal_scorer.py-68-        level=level,
+services/api/app/services/signal_scorer.py-69-        reasons=reasons,
+services/api/app/services/signal_scorer.py-70-    )
+--
+services/api/app/services/decision_engine.py-4-    MEDIUM_FIT_THRESHOLD,
+services/api/app/services/decision_engine.py-5-)
+services/api/app/services/decision_engine.py-6-from services.api.app.core.priority_policy import (
+services/api/app/services/decision_engine.py-7-    HIGH_PRIORITY_THRESHOLD,
+services/api/app/services/decision_engine.py-8-    MEDIUM_PRIORITY_THRESHOLD,
+services/api/app/services/decision_engine.py-9-)
+services/api/app/services/decision_engine.py-10-from services.api.app.schemas.crm import CRMContext, CRMStatus
+services/api/app/services/decision_engine.py-11-from services.api.app.schemas.decision import (
+services/api/app/services/decision_engine.py-12-    DecisionResult,
+services/api/app/services/decision_engine.py-13-    RecommendedAction,
+services/api/app/services/decision_engine.py-14-)
+services/api/app/services/decision_engine.py-15-from services.api.app.services.priority_engine import (
+services/api/app/services/decision_engine.py-16-    calculate_priority_score,
+services/api/app/services/decision_engine.py-17-)
+services/api/app/services/decision_engine.py-18-
+services/api/app/services/decision_engine.py-19-
+services/api/app/services/decision_engine.py-20-def make_decision(
+services/api/app/services/decision_engine.py-21-    icp_score: int,
+services/api/app/services/decision_engine.py-22-    data_confidence: int,
+services/api/app/services/decision_engine.py-23-    crm_context: CRMContext | None = None,
+services/api/app/services/decision_engine.py:24:    signal_score: int | None = None,
+services/api/app/services/decision_engine.py-25-    enrichment_available: bool | None = None,
+services/api/app/services/decision_engine.py-26-    icp_configured: bool = True,
+services/api/app/services/decision_engine.py-27-) -> DecisionResult:
+services/api/app/services/decision_engine.py-28-    crm_context = crm_context or CRMContext()
+services/api/app/services/decision_engine.py-29-
+services/api/app/services/decision_engine.py-30-    # CRM context always has the highest priority.
+services/api/app/services/decision_engine.py-31-    if crm_context.status == CRMStatus.OPEN_OPPORTUNITY:
+services/api/app/services/decision_engine.py-32-        return DecisionResult(
+services/api/app/services/decision_engine.py-33-            recommended_action=RecommendedAction.CONTINUE_OPPORTUNITY,
+services/api/app/services/decision_engine.py-34-            action_reason=(
+services/api/app/services/decision_engine.py-35-                "An active opportunity already exists; continue the current "
+services/api/app/services/decision_engine.py-36-                "sales process instead of creating new outbound activity."
+services/api/app/services/decision_engine.py-37-            ),
+services/api/app/services/decision_engine.py-38-        )
+services/api/app/services/decision_engine.py-39-
+services/api/app/services/decision_engine.py-40-    if crm_context.status == CRMStatus.EXISTING_CUSTOMER:
+services/api/app/services/decision_engine.py-41-        return DecisionResult(
+services/api/app/services/decision_engine.py-42-            recommended_action=RecommendedAction.EXPANSION,
+services/api/app/services/decision_engine.py-43-            action_reason=(
+services/api/app/services/decision_engine.py-44-                "This company is already a customer; evaluate it for expansion "
+services/api/app/services/decision_engine.py-45-                "or cross-sell opportunities."
+services/api/app/services/decision_engine.py-46-            ),
+services/api/app/services/decision_engine.py-47-        )
+services/api/app/services/decision_engine.py-48-
+services/api/app/services/decision_engine.py-49-    if crm_context.status == CRMStatus.RECENTLY_CONTACTED:
+services/api/app/services/decision_engine.py-50-        return DecisionResult(
+services/api/app/services/decision_engine.py-51-            recommended_action=RecommendedAction.PAUSE_OUTREACH,
+services/api/app/services/decision_engine.py-52-            action_reason=(
+services/api/app/services/decision_engine.py-53-                "The account was contacted recently; avoid duplicate outreach."
+services/api/app/services/decision_engine.py-54-            ),
+services/api/app/services/decision_engine.py-55-        )
+services/api/app/services/decision_engine.py-56-
+services/api/app/services/decision_engine.py-57-    # When no ICP has been configured, do not interpret
+services/api/app/services/decision_engine.py-58-    # the absence of an ICP score as poor account fit.
+services/api/app/services/decision_engine.py-59-    if not icp_configured:
+services/api/app/services/decision_engine.py-60-        priority_score, _ = calculate_priority_score(
+services/api/app/services/decision_engine.py-61-            icp_score=None,
+services/api/app/services/decision_engine.py:62:            signal_score=(
+services/api/app/services/decision_engine.py:63:                signal_score
+services/api/app/services/decision_engine.py-64-                if enrichment_available is not False
+services/api/app/services/decision_engine.py-65-                else None
+services/api/app/services/decision_engine.py-66-            ),
+services/api/app/services/decision_engine.py-67-            data_confidence=data_confidence,
+services/api/app/services/decision_engine.py-68-        )
+services/api/app/services/decision_engine.py-69-
+services/api/app/services/decision_engine.py-70-        if crm_context.status == CRMStatus.EXISTING_LEAD:
+services/api/app/services/decision_engine.py-71-            if (
+services/api/app/services/decision_engine.py-72-                priority_score >= HIGH_PRIORITY_THRESHOLD
+services/api/app/services/decision_engine.py-73-                and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+services/api/app/services/decision_engine.py-74-            ):
+services/api/app/services/decision_engine.py-75-                return DecisionResult(
+services/api/app/services/decision_engine.py-76-                    recommended_action=RecommendedAction.FOLLOW_UP_EXISTING,
+services/api/app/services/decision_engine.py-77-                    action_reason=(
+services/api/app/services/decision_engine.py-78-                        "An existing CRM lead has strong current signals "
+services/api/app/services/decision_engine.py-79-                        "and reliable data; continue working the existing record."
+services/api/app/services/decision_engine.py-80-                    ),
+services/api/app/services/decision_engine.py-81-                )
+services/api/app/services/decision_engine.py-82-
+services/api/app/services/decision_engine.py-83-            return DecisionResult(
+services/api/app/services/decision_engine.py-84-                recommended_action=RecommendedAction.NURTURE,
+services/api/app/services/decision_engine.py-85-                action_reason=(
+services/api/app/services/decision_engine.py-86-                    "An existing CRM lead is present, but no ICP profile "
+services/api/app/services/decision_engine.py-87-                    "has been configured to evaluate account fit."
+services/api/app/services/decision_engine.py-88-                ),
+services/api/app/services/decision_engine.py-89-            )
+services/api/app/services/decision_engine.py-90-
+services/api/app/services/decision_engine.py:91:        if enrichment_available is False or signal_score is None:
+services/api/app/services/decision_engine.py-92-            return DecisionResult(
+services/api/app/services/decision_engine.py-93-                recommended_action=RecommendedAction.RESEARCH_FIRST,
+services/api/app/services/decision_engine.py-94-                action_reason=(
+services/api/app/services/decision_engine.py-95-                    "No ICP profile is configured and current buying signals "
+services/api/app/services/decision_engine.py-96-                    "could not be verified; research the account before outreach."
+services/api/app/services/decision_engine.py-97-                ),
+services/api/app/services/decision_engine.py-98-            )
+services/api/app/services/decision_engine.py-99-
+services/api/app/services/decision_engine.py-100-        if (
+services/api/app/services/decision_engine.py-101-            priority_score >= HIGH_PRIORITY_THRESHOLD
+services/api/app/services/decision_engine.py-102-            and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+services/api/app/services/decision_engine.py-103-        ):
+services/api/app/services/decision_engine.py-104-            return DecisionResult(
+services/api/app/services/decision_engine.py-105-                recommended_action=RecommendedAction.WORK_NOW,
+services/api/app/services/decision_engine.py-106-                action_reason=(
+services/api/app/services/decision_engine.py-107-                    "Strong current account signals with high-confidence data."
+services/api/app/services/decision_engine.py-108-                ),
+services/api/app/services/decision_engine.py-109-            )
+services/api/app/services/decision_engine.py-110-
+services/api/app/services/decision_engine.py-111-        return DecisionResult(
+services/api/app/services/decision_engine.py-112-            recommended_action=RecommendedAction.NURTURE,
+services/api/app/services/decision_engine.py-113-            action_reason=(
+services/api/app/services/decision_engine.py-114-                "No ICP profile is configured; keep the account in consideration "
+services/api/app/services/decision_engine.py-115-                "until stronger timing signals or targeting criteria are available."
+services/api/app/services/decision_engine.py-116-            ),
+services/api/app/services/decision_engine.py-117-        )
+services/api/app/services/decision_engine.py-118-
+services/api/app/services/decision_engine.py-119-    # Existing-lead behavior when ICP is configured.
+services/api/app/services/decision_engine.py-120-    if crm_context.status == CRMStatus.EXISTING_LEAD:
+services/api/app/services/decision_engine.py-121-        if (
+services/api/app/services/decision_engine.py-122-            icp_score >= HIGH_FIT_THRESHOLD
+services/api/app/services/decision_engine.py-123-            and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+services/api/app/services/decision_engine.py-124-        ):
+services/api/app/services/decision_engine.py-125-            return DecisionResult(
+services/api/app/services/decision_engine.py-126-                recommended_action=RecommendedAction.FOLLOW_UP_EXISTING,
+services/api/app/services/decision_engine.py-127-                action_reason=(
+services/api/app/services/decision_engine.py-128-                    "A high-fit lead already exists in the CRM; continue "
+services/api/app/services/decision_engine.py-129-                    "working the existing record."
+services/api/app/services/decision_engine.py-130-                ),
+services/api/app/services/decision_engine.py-131-            )
+services/api/app/services/decision_engine.py-132-
+services/api/app/services/decision_engine.py-133-        if icp_score >= MEDIUM_FIT_THRESHOLD:
+services/api/app/services/decision_engine.py-134-            return DecisionResult(
+services/api/app/services/decision_engine.py-135-                recommended_action=RecommendedAction.NURTURE,
+services/api/app/services/decision_engine.py-136-                action_reason=(
+services/api/app/services/decision_engine.py-137-                    "An existing lead has moderate fit; keep it in nurture."
+services/api/app/services/decision_engine.py-138-                ),
+services/api/app/services/decision_engine.py-139-            )
+services/api/app/services/decision_engine.py-140-
+services/api/app/services/decision_engine.py-141-    # Backward-compatible behavior when enrichment was not used.
+services/api/app/services/decision_engine.py:142:    if signal_score is None:
+services/api/app/services/decision_engine.py-143-        if icp_score >= HIGH_FIT_THRESHOLD:
+services/api/app/services/decision_engine.py-144-            if data_confidence >= HIGH_CONFIDENCE_THRESHOLD:
+services/api/app/services/decision_engine.py-145-                return DecisionResult(
+services/api/app/services/decision_engine.py-146-                    recommended_action=RecommendedAction.WORK_NOW,
+services/api/app/services/decision_engine.py-147-                    action_reason="Strong ICP fit with high-confidence data.",
+services/api/app/services/decision_engine.py-148-                )
+services/api/app/services/decision_engine.py-149-
+services/api/app/services/decision_engine.py-150-            return DecisionResult(
+services/api/app/services/decision_engine.py-151-                recommended_action=RecommendedAction.RESEARCH_FIRST,
+services/api/app/services/decision_engine.py-152-                action_reason=(
+services/api/app/services/decision_engine.py-153-                    "Strong ICP fit, but more reliable data is needed."
+services/api/app/services/decision_engine.py-154-                ),
+services/api/app/services/decision_engine.py-155-            )
+services/api/app/services/decision_engine.py-156-
+services/api/app/services/decision_engine.py-157-        if icp_score >= MEDIUM_FIT_THRESHOLD:
+services/api/app/services/decision_engine.py-158-            return DecisionResult(
+services/api/app/services/decision_engine.py-159-                recommended_action=RecommendedAction.NURTURE,
+services/api/app/services/decision_engine.py-160-                action_reason=(
+services/api/app/services/decision_engine.py-161-                    "Moderate ICP fit; keep the account in consideration."
+services/api/app/services/decision_engine.py-162-                ),
+services/api/app/services/decision_engine.py-163-            )
+services/api/app/services/decision_engine.py-164-
+services/api/app/services/decision_engine.py-165-        return DecisionResult(
+services/api/app/services/decision_engine.py-166-            recommended_action=RecommendedAction.DEPRIORITIZE,
+services/api/app/services/decision_engine.py-167-            action_reason=(
+services/api/app/services/decision_engine.py-168-                "Low ICP fit compared with the current target profile."
+services/api/app/services/decision_engine.py-169-            ),
+services/api/app/services/decision_engine.py-170-        )
+services/api/app/services/decision_engine.py-171-
+services/api/app/services/decision_engine.py-172-    # Failed enrichment is uncertainty, not proof of poor fit.
+services/api/app/services/decision_engine.py-173-    if (
+services/api/app/services/decision_engine.py-174-        icp_score >= HIGH_FIT_THRESHOLD
+services/api/app/services/decision_engine.py-175-        and enrichment_available is False
+services/api/app/services/decision_engine.py-176-    ):
+services/api/app/services/decision_engine.py-177-        return DecisionResult(
+services/api/app/services/decision_engine.py-178-            recommended_action=RecommendedAction.RESEARCH_FIRST,
+services/api/app/services/decision_engine.py-179-            action_reason=(
+services/api/app/services/decision_engine.py-180-                "Strong ICP fit, but live enrichment could not verify "
+services/api/app/services/decision_engine.py-181-                "current buying or timing signals."
+services/api/app/services/decision_engine.py-182-            ),
+services/api/app/services/decision_engine.py-183-        )
+services/api/app/services/decision_engine.py-184-
+services/api/app/services/decision_engine.py-185-    priority_score, _ = calculate_priority_score(
+services/api/app/services/decision_engine.py-186-        icp_score=icp_score,
+services/api/app/services/decision_engine.py:187:        signal_score=signal_score,
+services/api/app/services/decision_engine.py-188-        data_confidence=data_confidence,
+services/api/app/services/decision_engine.py-189-    )
+services/api/app/services/decision_engine.py-190-
+services/api/app/services/decision_engine.py-191-    if (
+services/api/app/services/decision_engine.py-192-        priority_score >= HIGH_PRIORITY_THRESHOLD
+services/api/app/services/decision_engine.py-193-        and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+services/api/app/services/decision_engine.py-194-    ):
+services/api/app/services/decision_engine.py-195-        return DecisionResult(
+services/api/app/services/decision_engine.py-196-            recommended_action=RecommendedAction.WORK_NOW,
+services/api/app/services/decision_engine.py-197-            action_reason=(
+services/api/app/services/decision_engine.py-198-                "Strong account fit combined with meaningful current signals."
+services/api/app/services/decision_engine.py-199-            ),
+services/api/app/services/decision_engine.py-200-        )
+services/api/app/services/decision_engine.py-201-
+services/api/app/services/decision_engine.py-202-    if priority_score >= MEDIUM_PRIORITY_THRESHOLD:
+services/api/app/services/decision_engine.py-203-        return DecisionResult(
+services/api/app/services/decision_engine.py-204-            recommended_action=RecommendedAction.NURTURE,
+services/api/app/services/decision_engine.py-205-            action_reason=(
+services/api/app/services/decision_engine.py-206-                "The account has potential, but its current priority is "
+services/api/app/services/decision_engine.py-207-                "not high enough for immediate outreach."
+services/api/app/services/decision_engine.py-208-            ),
+services/api/app/services/decision_engine.py-209-        )
+services/api/app/services/decision_engine.py-210-
+services/api/app/services/decision_engine.py-211-    return DecisionResult(
+services/api/app/services/decision_engine.py-212-        recommended_action=RecommendedAction.DEPRIORITIZE,
+services/api/app/services/decision_engine.py-213-        action_reason=(
+services/api/app/services/decision_engine.py-214-            "Account fit and current signals indicate low outbound priority."
+services/api/app/services/decision_engine.py-215-        ),
+services/api/app/services/decision_engine.py-216-    )
+--
+services/api/app/services/priority_engine.py-1-from services.api.app.core.priority_policy import (
+services/api/app/services/priority_engine.py-2-    HIGH_PRIORITY_THRESHOLD,
+services/api/app/services/priority_engine.py-3-    ICP_WEIGHT,
+services/api/app/services/priority_engine.py-4-    MEDIUM_PRIORITY_THRESHOLD,
+services/api/app/services/priority_engine.py-5-    SIGNAL_WEIGHT,
+services/api/app/services/priority_engine.py-6-)
+services/api/app/services/priority_engine.py-7-
+services/api/app/services/priority_engine.py-8-
+services/api/app/services/priority_engine.py-9-def calculate_priority_score(
+services/api/app/services/priority_engine.py-10-    icp_score: int | None,
+services/api/app/services/priority_engine.py:11:    signal_score: int | None = None,
+services/api/app/services/priority_engine.py-12-    data_confidence: int | None = None,
+services/api/app/services/priority_engine.py-13-) -> tuple[int, str]:
+services/api/app/services/priority_engine.py-14-    """
+services/api/app/services/priority_engine.py-15-    Priority strategy:
+services/api/app/services/priority_engine.py-16-
+services/api/app/services/priority_engine.py-17-    With ICP configured:
+services/api/app/services/priority_engine.py-18-        - ICP only when signals are unavailable.
+services/api/app/services/priority_engine.py-19-        - ICP + signals when live enrichment succeeds.
+services/api/app/services/priority_engine.py-20-
+services/api/app/services/priority_engine.py-21-    Without ICP configured:
+services/api/app/services/priority_engine.py-22-        - Use current signals as the main prioritization input.
+services/api/app/services/priority_engine.py-23-        - Use data confidence as a smaller supporting input.
+services/api/app/services/priority_engine.py-24-        - Missing enrichment is uncertainty, not a negative signal.
+services/api/app/services/priority_engine.py-25-    """
+services/api/app/services/priority_engine.py-26-
+services/api/app/services/priority_engine.py-27-    if icp_score is None:
+services/api/app/services/priority_engine.py-28-        confidence = data_confidence or 0
+services/api/app/services/priority_engine.py-29-
+services/api/app/services/priority_engine.py:30:        if signal_score is None:
+services/api/app/services/priority_engine.py-31-            # No ICP and no verified current signal.
+services/api/app/services/priority_engine.py-32-            # Confidence helps order research work, but cannot
+services/api/app/services/priority_engine.py-33-            # create a high-priority account by itself.
+services/api/app/services/priority_engine.py-34-            priority_score = round(confidence * 0.40)
+services/api/app/services/priority_engine.py-35-        else:
+services/api/app/services/priority_engine.py-36-            priority_score = round(
+services/api/app/services/priority_engine.py:37:                (signal_score * 0.80)
+services/api/app/services/priority_engine.py-38-                + (confidence * 0.20)
+services/api/app/services/priority_engine.py-39-            )
+services/api/app/services/priority_engine.py-40-
+services/api/app/services/priority_engine.py:41:    elif signal_score is None:
+services/api/app/services/priority_engine.py-42-        # Preserve the existing behavior when ICP exists
+services/api/app/services/priority_engine.py-43-        # but enrichment is unavailable.
+services/api/app/services/priority_engine.py-44-        priority_score = icp_score
+services/api/app/services/priority_engine.py-45-
+services/api/app/services/priority_engine.py-46-    else:
+services/api/app/services/priority_engine.py-47-        priority_score = round(
+services/api/app/services/priority_engine.py-48-            (icp_score * ICP_WEIGHT)
+services/api/app/services/priority_engine.py:49:            + (signal_score * SIGNAL_WEIGHT)
+services/api/app/services/priority_engine.py-50-        )
+services/api/app/services/priority_engine.py-51-
+services/api/app/services/priority_engine.py-52-    if priority_score >= HIGH_PRIORITY_THRESHOLD:
+services/api/app/services/priority_engine.py-53-        level = "high"
+services/api/app/services/priority_engine.py-54-    elif priority_score >= MEDIUM_PRIORITY_THRESHOLD:
+services/api/app/services/priority_engine.py-55-        level = "medium"
+services/api/app/services/priority_engine.py-56-    else:
+services/api/app/services/priority_engine.py-57-        level = "low"
+services/api/app/services/priority_engine.py-58-
+services/api/app/services/priority_engine.py-59-    return priority_score, level
+--
+services/api/app/services/icp_scorer.py-1-from services.api.app.schemas.company import CompanyNormalized
+services/api/app/services/icp_scorer.py-2-from services.api.app.services.company_normalizer import (
+services/api/app/services/icp_scorer.py-3-    account_context_key,
+services/api/app/services/icp_scorer.py-4-)
+services/api/app/services/icp_scorer.py-5-from services.api.app.schemas.crm import CRMContext
+services/api/app/services/icp_scorer.py-6-from services.api.app.schemas.enrichment import WebsiteEnrichment
+services/api/app/services/icp_scorer.py-7-from services.api.app.schemas.scoring import CompanyScore, ICPProfile
+services/api/app/services/icp_scorer.py-8-from services.api.app.services.data_confidence import (
+services/api/app/services/icp_scorer.py-9-    calculate_data_confidence,
+services/api/app/services/icp_scorer.py-10-)
+services/api/app/services/icp_scorer.py-11-from services.api.app.services.decision_engine import make_decision
+services/api/app/services/icp_scorer.py-12-from services.api.app.services.priority_engine import (
+services/api/app/services/icp_scorer.py-13-    calculate_priority_score,
+services/api/app/services/icp_scorer.py-14-)
+services/api/app/services/icp_scorer.py:15:from services.api.app.services.signal_scorer import (
+services/api/app/services/icp_scorer.py:16:    calculate_signal_score,
+services/api/app/services/icp_scorer.py-17-)
+services/api/app/services/icp_scorer.py-18-
+services/api/app/services/icp_scorer.py-19-
+services/api/app/services/icp_scorer.py-20-def is_icp_configured(icp: ICPProfile) -> bool:
+services/api/app/services/icp_scorer.py-21-    return bool(
+services/api/app/services/icp_scorer.py-22-        icp.target_countries
+services/api/app/services/icp_scorer.py-23-        or icp.target_industries
+services/api/app/services/icp_scorer.py-24-        or icp.min_employees is not None
+services/api/app/services/icp_scorer.py-25-        or icp.max_employees is not None
+services/api/app/services/icp_scorer.py-26-    )
+services/api/app/services/icp_scorer.py-27-
+services/api/app/services/icp_scorer.py-28-
+services/api/app/services/icp_scorer.py-29-def calculate_icp_fit(
+services/api/app/services/icp_scorer.py-30-    company: CompanyNormalized,
+services/api/app/services/icp_scorer.py-31-    icp: ICPProfile,
+services/api/app/services/icp_scorer.py-32-) -> tuple[int, str, list[str]]:
+services/api/app/services/icp_scorer.py-33-    configured = is_icp_configured(icp)
+services/api/app/services/icp_scorer.py-34-
+services/api/app/services/icp_scorer.py-35-    if not configured:
+services/api/app/services/icp_scorer.py-36-        return (
+services/api/app/services/icp_scorer.py-37-            0,
+services/api/app/services/icp_scorer.py-38-            "not_configured",
+services/api/app/services/icp_scorer.py-39-            [
+services/api/app/services/icp_scorer.py-40-                "ICP not configured; this account was not filtered or penalized by fit."
+services/api/app/services/icp_scorer.py-41-            ],
+services/api/app/services/icp_scorer.py-42-        )
+services/api/app/services/icp_scorer.py-43-
+services/api/app/services/icp_scorer.py-44-    matched_weight = 0
+services/api/app/services/icp_scorer.py-45-    configured_weight = 0
+services/api/app/services/icp_scorer.py-46-    reasons: list[str] = []
+services/api/app/services/icp_scorer.py-47-
+services/api/app/services/icp_scorer.py-48-    # Country criterion: weight 30
+services/api/app/services/icp_scorer.py-49-    if icp.target_countries:
+services/api/app/services/icp_scorer.py-50-        configured_weight += 30
+services/api/app/services/icp_scorer.py-51-
+services/api/app/services/icp_scorer.py-52-        countries = {
+services/api/app/services/icp_scorer.py-53-            country.strip().lower()
+services/api/app/services/icp_scorer.py-54-            for country in icp.target_countries
+services/api/app/services/icp_scorer.py-55-        }
+services/api/app/services/icp_scorer.py-56-
+services/api/app/services/icp_scorer.py-57-        if (
+services/api/app/services/icp_scorer.py-58-            company.country
+services/api/app/services/icp_scorer.py-59-            and company.country.strip().lower() in countries
+services/api/app/services/icp_scorer.py-60-        ):
+services/api/app/services/icp_scorer.py-61-            matched_weight += 30
+services/api/app/services/icp_scorer.py-62-            reasons.append("Target country match")
+services/api/app/services/icp_scorer.py-63-        else:
+services/api/app/services/icp_scorer.py-64-            reasons.append("Country outside target market")
+services/api/app/services/icp_scorer.py-65-
+services/api/app/services/icp_scorer.py-66-    # Industry criterion: weight 40
+services/api/app/services/icp_scorer.py-67-    if icp.target_industries:
+services/api/app/services/icp_scorer.py-68-        configured_weight += 40
+services/api/app/services/icp_scorer.py-69-
+services/api/app/services/icp_scorer.py-70-        industries = {
+services/api/app/services/icp_scorer.py-71-            industry.strip().lower()
+services/api/app/services/icp_scorer.py-72-            for industry in icp.target_industries
+services/api/app/services/icp_scorer.py-73-        }
+services/api/app/services/icp_scorer.py-74-
+services/api/app/services/icp_scorer.py-75-        if (
+services/api/app/services/icp_scorer.py-76-            company.industry
+services/api/app/services/icp_scorer.py-77-            and company.industry.strip().lower() in industries
+services/api/app/services/icp_scorer.py-78-        ):
+services/api/app/services/icp_scorer.py-79-            matched_weight += 40
+services/api/app/services/icp_scorer.py-80-            reasons.append("Target industry match")
+services/api/app/services/icp_scorer.py-81-        else:
+services/api/app/services/icp_scorer.py-82-            reasons.append("Industry outside target ICP")
+services/api/app/services/icp_scorer.py-83-
+services/api/app/services/icp_scorer.py-84-    # Company-size criterion: weight 30.
+services/api/app/services/icp_scorer.py-85-    # Only contributes when the user actually configured a range.
+services/api/app/services/icp_scorer.py-86-    size_configured = (
+services/api/app/services/icp_scorer.py-87-        icp.min_employees is not None
+services/api/app/services/icp_scorer.py-88-        or icp.max_employees is not None
+services/api/app/services/icp_scorer.py-89-    )
+services/api/app/services/icp_scorer.py-90-
+services/api/app/services/icp_scorer.py-91-    if size_configured:
+services/api/app/services/icp_scorer.py-92-        configured_weight += 30
+services/api/app/services/icp_scorer.py-93-
+services/api/app/services/icp_scorer.py-94-        if company.employee_count is None:
+services/api/app/services/icp_scorer.py-95-            reasons.append(
+services/api/app/services/icp_scorer.py-96-                "Company size unavailable for ICP comparison"
+services/api/app/services/icp_scorer.py-97-            )
+services/api/app/services/icp_scorer.py-98-        else:
+services/api/app/services/icp_scorer.py-99-            min_ok = (
+services/api/app/services/icp_scorer.py-100-                icp.min_employees is None
+services/api/app/services/icp_scorer.py-101-                or company.employee_count >= icp.min_employees
+services/api/app/services/icp_scorer.py-102-            )
+services/api/app/services/icp_scorer.py-103-
+services/api/app/services/icp_scorer.py-104-            max_ok = (
+services/api/app/services/icp_scorer.py-105-                icp.max_employees is None
+services/api/app/services/icp_scorer.py-106-                or company.employee_count <= icp.max_employees
+services/api/app/services/icp_scorer.py-107-            )
+services/api/app/services/icp_scorer.py-108-
+services/api/app/services/icp_scorer.py-109-            if min_ok and max_ok:
+services/api/app/services/icp_scorer.py-110-                matched_weight += 30
+services/api/app/services/icp_scorer.py-111-                reasons.append(
+services/api/app/services/icp_scorer.py-112-                    "Company size within preferred range"
+services/api/app/services/icp_scorer.py-113-                )
+services/api/app/services/icp_scorer.py-114-            else:
+services/api/app/services/icp_scorer.py-115-                reasons.append(
+services/api/app/services/icp_scorer.py-116-                    "Company size outside preferred range"
+services/api/app/services/icp_scorer.py-117-                )
+services/api/app/services/icp_scorer.py-118-
+services/api/app/services/icp_scorer.py-119-    # Normalize against only the criteria that were configured.
+services/api/app/services/icp_scorer.py-120-    score = (
+services/api/app/services/icp_scorer.py-121-        round((matched_weight / configured_weight) * 100)
+services/api/app/services/icp_scorer.py-122-        if configured_weight
+services/api/app/services/icp_scorer.py-123-        else 0
+services/api/app/services/icp_scorer.py-124-    )
+services/api/app/services/icp_scorer.py-125-
+services/api/app/services/icp_scorer.py-126-    if score >= 80:
+services/api/app/services/icp_scorer.py-127-        fit_level = "high"
+services/api/app/services/icp_scorer.py-128-    elif score >= 50:
+services/api/app/services/icp_scorer.py-129-        fit_level = "medium"
+services/api/app/services/icp_scorer.py-130-    else:
+services/api/app/services/icp_scorer.py-131-        fit_level = "low"
+services/api/app/services/icp_scorer.py-132-
+services/api/app/services/icp_scorer.py-133-    return score, fit_level, reasons
+services/api/app/services/icp_scorer.py-134-
+services/api/app/services/icp_scorer.py-135-
+services/api/app/services/icp_scorer.py-136-def score_company(
+services/api/app/services/icp_scorer.py-137-    company: CompanyNormalized,
+services/api/app/services/icp_scorer.py-138-    icp: ICPProfile,
+services/api/app/services/icp_scorer.py-139-    crm_context: CRMContext | None = None,
+services/api/app/services/icp_scorer.py-140-    enrichment: WebsiteEnrichment | None = None,
+services/api/app/services/icp_scorer.py-141-) -> CompanyScore:
+services/api/app/services/icp_scorer.py-142-    crm_context = crm_context or CRMContext()
+services/api/app/services/icp_scorer.py-143-
+services/api/app/services/icp_scorer.py-144-    icp_configured = is_icp_configured(icp)
+services/api/app/services/icp_scorer.py-145-
+services/api/app/services/icp_scorer.py-146-    score, fit_level, reasons = calculate_icp_fit(
+services/api/app/services/icp_scorer.py-147-        company=company,
+services/api/app/services/icp_scorer.py-148-        icp=icp,
+services/api/app/services/icp_scorer.py-149-    )
+services/api/app/services/icp_scorer.py-150-
+services/api/app/services/icp_scorer.py-151-    data_confidence, confidence_level, confidence_reasons = (
+services/api/app/services/icp_scorer.py-152-        calculate_data_confidence(company)
+services/api/app/services/icp_scorer.py-153-    )
+services/api/app/services/icp_scorer.py-154-
+services/api/app/services/icp_scorer.py:155:    signal_result = calculate_signal_score(enrichment)
+services/api/app/services/icp_scorer.py-156-
+services/api/app/services/icp_scorer.py-157-    enrichment_available = (
+services/api/app/services/icp_scorer.py-158-        enrichment is not None
+services/api/app/services/icp_scorer.py-159-        and enrichment.reachable
+services/api/app/services/icp_scorer.py-160-    )
+services/api/app/services/icp_scorer.py-161-
+services/api/app/services/icp_scorer.py-162-    signal_for_priority = (
+services/api/app/services/icp_scorer.py-163-        signal_result.score
+services/api/app/services/icp_scorer.py-164-        if enrichment_available
+services/api/app/services/icp_scorer.py-165-        else None
+services/api/app/services/icp_scorer.py-166-    )
+services/api/app/services/icp_scorer.py-167-
+services/api/app/services/icp_scorer.py-168-    priority_score, priority_level = calculate_priority_score(
+services/api/app/services/icp_scorer.py-169-        icp_score=(
+services/api/app/services/icp_scorer.py-170-            score
+services/api/app/services/icp_scorer.py-171-            if icp_configured
+services/api/app/services/icp_scorer.py-172-            else None
+services/api/app/services/icp_scorer.py-173-        ),
+services/api/app/services/icp_scorer.py:174:        signal_score=signal_for_priority,
+services/api/app/services/icp_scorer.py-175-        data_confidence=data_confidence,
+services/api/app/services/icp_scorer.py-176-    )
+services/api/app/services/icp_scorer.py-177-
+services/api/app/services/icp_scorer.py-178-    decision = make_decision(
+services/api/app/services/icp_scorer.py-179-        icp_score=score,
+services/api/app/services/icp_scorer.py-180-        data_confidence=data_confidence,
+services/api/app/services/icp_scorer.py-181-        crm_context=crm_context,
+services/api/app/services/icp_scorer.py:182:        signal_score=(
+services/api/app/services/icp_scorer.py-183-            signal_result.score
+services/api/app/services/icp_scorer.py-184-            if enrichment is not None
+services/api/app/services/icp_scorer.py-185-            else None
+services/api/app/services/icp_scorer.py-186-        ),
+services/api/app/services/icp_scorer.py-187-        enrichment_available=(
+services/api/app/services/icp_scorer.py-188-            enrichment.reachable
+services/api/app/services/icp_scorer.py-189-            if enrichment is not None
+services/api/app/services/icp_scorer.py-190-            else None
+services/api/app/services/icp_scorer.py-191-        ),
+services/api/app/services/icp_scorer.py-192-        icp_configured=icp_configured,
+services/api/app/services/icp_scorer.py-193-    )
+services/api/app/services/icp_scorer.py-194-
+services/api/app/services/icp_scorer.py-195-    return CompanyScore(
+services/api/app/services/icp_scorer.py-196-        company=company,
+services/api/app/services/icp_scorer.py-197-        icp_score=score,
+services/api/app/services/icp_scorer.py-198-        fit_level=fit_level,
+services/api/app/services/icp_scorer.py:199:        signal_score=signal_result.score,
+services/api/app/services/icp_scorer.py-200-        signal_level=signal_result.level,
+services/api/app/services/icp_scorer.py-201-        priority_score=priority_score,
+services/api/app/services/icp_scorer.py-202-        priority_level=priority_level,
+services/api/app/services/icp_scorer.py-203-        data_confidence=data_confidence,
+services/api/app/services/icp_scorer.py-204-        confidence_level=confidence_level,
+services/api/app/services/icp_scorer.py-205-        crm_status=crm_context.status.value,
+services/api/app/services/icp_scorer.py-206-        crm_source=crm_context.source,
+services/api/app/services/icp_scorer.py-207-        recommended_action=decision.recommended_action.value,
+services/api/app/services/icp_scorer.py-208-        action_reason=decision.action_reason,
+services/api/app/services/icp_scorer.py-209-        reasons=reasons,
+services/api/app/services/icp_scorer.py-210-        signal_reasons=signal_result.reasons,
+services/api/app/services/icp_scorer.py-211-        confidence_reasons=confidence_reasons,
+services/api/app/services/icp_scorer.py-212-    )
+services/api/app/services/icp_scorer.py-213-
+services/api/app/services/icp_scorer.py-214-
+services/api/app/services/icp_scorer.py-215-def score_and_rank_companies(
+services/api/app/services/icp_scorer.py-216-    companies: list[CompanyNormalized],
+services/api/app/services/icp_scorer.py-217-    icp: ICPProfile,
+services/api/app/services/icp_scorer.py-218-    crm_contexts: dict[str, CRMContext] | None = None,
+services/api/app/services/icp_scorer.py-219-    enrichment_contexts: dict[str, WebsiteEnrichment] | None = None,
+services/api/app/services/icp_scorer.py-220-) -> list[CompanyScore]:
+services/api/app/services/icp_scorer.py-221-    crm_contexts = crm_contexts or {}
+services/api/app/services/icp_scorer.py-222-    enrichment_contexts = enrichment_contexts or {}
+services/api/app/services/icp_scorer.py-223-
+services/api/app/services/icp_scorer.py-224-    normalized_crm_contexts = {
+services/api/app/services/icp_scorer.py-225-        domain.lower(): context
+services/api/app/services/icp_scorer.py-226-        for domain, context in crm_contexts.items()
+services/api/app/services/icp_scorer.py-227-    }
+services/api/app/services/icp_scorer.py-228-
+services/api/app/services/icp_scorer.py-229-    normalized_enrichment_contexts = {
+services/api/app/services/icp_scorer.py-230-        domain.lower(): enrichment
+services/api/app/services/icp_scorer.py-231-        for domain, enrichment in enrichment_contexts.items()
+services/api/app/services/icp_scorer.py-232-    }
+services/api/app/services/icp_scorer.py-233-
+services/api/app/services/icp_scorer.py-234-    scored = []
+services/api/app/services/icp_scorer.py-235-
+services/api/app/services/icp_scorer.py-236-    for company in companies:
+services/api/app/services/icp_scorer.py-237-        domain = (company.domain or "").lower()
+services/api/app/services/icp_scorer.py-238-
+services/api/app/services/icp_scorer.py-239-        crm_context = normalized_crm_contexts.get(
+services/api/app/services/icp_scorer.py-240-            account_context_key(
+services/api/app/services/icp_scorer.py-241-                company
+services/api/app/services/icp_scorer.py-242-            )
+services/api/app/services/icp_scorer.py-243-        )
+services/api/app/services/icp_scorer.py-244-
+services/api/app/services/icp_scorer.py-245-        if crm_context is None:
+services/api/app/services/icp_scorer.py-246-            crm_context = normalized_crm_contexts.get(
+services/api/app/services/icp_scorer.py-247-                domain,
+services/api/app/services/icp_scorer.py-248-                CRMContext(),
+services/api/app/services/icp_scorer.py-249-            )
+services/api/app/services/icp_scorer.py-250-
+services/api/app/services/icp_scorer.py-251-        enrichment = normalized_enrichment_contexts.get(
+services/api/app/services/icp_scorer.py-252-            domain
+services/api/app/services/icp_scorer.py-253-        )
+services/api/app/services/icp_scorer.py-254-
+services/api/app/services/icp_scorer.py-255-        scored.append(
+services/api/app/services/icp_scorer.py-256-            score_company(
+services/api/app/services/icp_scorer.py-257-                company=company,
+services/api/app/services/icp_scorer.py-258-                icp=icp,
+services/api/app/services/icp_scorer.py-259-                crm_context=crm_context,
+services/api/app/services/icp_scorer.py-260-                enrichment=enrichment,
+services/api/app/services/icp_scorer.py-261-            )
+services/api/app/services/icp_scorer.py-262-        )
+services/api/app/services/icp_scorer.py-263-
+services/api/app/services/icp_scorer.py-264-    action_priority = {
+services/api/app/services/icp_scorer.py-265-        "continue_opportunity": 8,
+services/api/app/services/icp_scorer.py-266-        "follow_up_existing": 7,
+services/api/app/services/icp_scorer.py-267-        "work_now": 6,
+services/api/app/services/icp_scorer.py-268-        "expansion": 5,
+services/api/app/services/icp_scorer.py-269-        "research_first": 4,
+services/api/app/services/icp_scorer.py-270-        "nurture": 3,
+services/api/app/services/icp_scorer.py-271-        "pause_outreach": 2,
+services/api/app/services/icp_scorer.py-272-        "deprioritize": 1,
+services/api/app/services/icp_scorer.py-273-    }
+services/api/app/services/icp_scorer.py-274-
+services/api/app/services/icp_scorer.py-275-    scored.sort(
+services/api/app/services/icp_scorer.py-276-        key=lambda item: (
+services/api/app/services/icp_scorer.py-277-            action_priority.get(
+services/api/app/services/icp_scorer.py-278-                item.recommended_action,
+services/api/app/services/icp_scorer.py-279-                0,
+services/api/app/services/icp_scorer.py-280-            ),
+services/api/app/services/icp_scorer.py-281-            item.priority_score,
+services/api/app/services/icp_scorer.py:282:            item.signal_score,
+services/api/app/services/icp_scorer.py-283-            item.data_confidence,
+services/api/app/services/icp_scorer.py-284-            item.icp_score,
+services/api/app/services/icp_scorer.py-285-        ),
+services/api/app/services/icp_scorer.py-286-        reverse=True,
+services/api/app/services/icp_scorer.py-287-    )
+services/api/app/services/icp_scorer.py-288-
+services/api/app/services/icp_scorer.py-289-    return scored
+
+--- WEBSITE PROVIDER ---
+import httpx
+
+from services.api.app.integrations.enrichment.base import EnrichmentProvider
+from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.enrichment import WebsiteEnrichment
+from services.api.app.services.website_parser import extract_website_signals
+
+
+class WebsiteEnrichmentProvider(EnrichmentProvider):
+    def __init__(self):
+        self.timeout = 8.0
+
+        self.headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; GTMDecisionEngine/0.1; "
+                "+portfolio-project)"
+            )
+        }
+
+    async def enrich(
+        self,
+        company: CompanyNormalized,
+    ) -> WebsiteEnrichment:
+        url = company.website
+
+        if not url and company.domain:
+            url = f"https://{company.domain}"
+
+        if not url:
+            return WebsiteEnrichment(
+                reachable=False,
+                error="No website or domain available.",
+            )
+
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=self.timeout,
+                headers=self.headers,
+            ) as client:
+                response = await client.get(url)
+
+            if response.status_code >= 400:
+                return WebsiteEnrichment(
+                    requested_url=url,
+                    final_url=str(response.url),
+                    reachable=False,
+                    status_code=response.status_code,
+                    error=f"Website returned HTTP {response.status_code}.",
+                )
+
+            html = response.text[:2_000_000]
+
+            signals = extract_website_signals(html)
+
+            return WebsiteEnrichment(
+                requested_url=url,
+                final_url=str(response.url),
+                reachable=True,
+                status_code=response.status_code,
+                **signals,
+            )
+
+        except httpx.RequestError as exc:
+            return WebsiteEnrichment(
+                requested_url=url,
+                reachable=False,
+                error=f"Website request failed: {exc.__class__.__name__}",
+            )
+
+--- ENRICHMENT BASE ---
+from abc import ABC, abstractmethod
+
+from services.api.app.schemas.company import CompanyNormalized
+from services.api.app.schemas.enrichment import WebsiteEnrichment
+
+
+class EnrichmentProvider(ABC):
+    @abstractmethod
+    async def enrich(
+        self,
+        company: CompanyNormalized,
+    ) -> WebsiteEnrichment:
+        raise NotImplementedError

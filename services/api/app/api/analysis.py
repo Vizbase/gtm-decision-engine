@@ -1,3 +1,4 @@
+import os
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,6 +13,9 @@ from services.api.app.integrations.enrichment.demo_snapshot_provider import (
 )
 from services.api.app.integrations.enrichment.website_provider import (
     WebsiteEnrichmentProvider,
+)
+from services.api.app.integrations.enrichment.sample_signal_provider import (
+    SampleSignalEnrichmentProvider,
 )
 from services.api.app.repositories.analysis_repository import (
     AnalysisRepository,
@@ -37,6 +41,15 @@ from services.api.app.services.analysis_pipeline import (
 router = APIRouter(
     prefix="/analysis",
     tags=["Analysis"],
+)
+
+
+PUBLIC_PORTFOLIO_MODE = (
+    os.getenv(
+        "PUBLIC_PORTFOLIO_MODE",
+        "false",
+    ).lower()
+    in {"1", "true", "yes", "on"}
 )
 
 
@@ -136,7 +149,22 @@ async def run_analysis(
     request: AnalysisRequest,
     db: Session = Depends(get_db),
 ):
-    results = await live_analysis_pipeline.run(
+    pipeline = live_analysis_pipeline
+
+    if request.enrichment_mode == "sample":
+        pipeline = AnalysisPipeline(
+            crm_provider=DemoCRMProvider(),
+            enrichment_provider=(
+                SampleSignalEnrichmentProvider(
+                    dataset_id=(
+                        request.sample_dataset_id
+                        or "sample"
+                    )
+                )
+            ),
+        )
+
+    results = await pipeline.run(
         companies=request.companies,
         icp=request.icp,
         use_website_enrichment=(
@@ -144,6 +172,18 @@ async def run_analysis(
         ),
         crm_contexts=request.crm_contexts,
     )
+
+    should_persist = (
+        request.persist
+        and not PUBLIC_PORTFOLIO_MODE
+    )
+
+    if not should_persist:
+        return AnalysisResponse(
+            analysis_run_id=None,
+            total_companies=len(results),
+            results=results,
+        )
 
     repository = AnalysisRepository(db)
 

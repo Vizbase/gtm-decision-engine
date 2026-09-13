@@ -196,7 +196,16 @@ export default function CompanyDetailPanel({
           </Section>
 
 
-          <Section title="Website research">
+          <Section title="Signal research">
+            <InfoRow
+              label="Source"
+              value={
+                result.enrichment?.source === "sample_signal"
+                  ? "Synthetic sample snapshot"
+                  : "Live website enrichment"
+              }
+            />
+
             <InfoRow
               label="Reachable"
               value={

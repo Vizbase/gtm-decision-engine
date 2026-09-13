@@ -69,6 +69,7 @@ export type StoredAnalysisResult = {
   confidence_reasons: string[];
 
   enrichment: {
+    source?: string;
     reachable?: boolean;
     title?: string | null;
     description?: string | null;
@@ -77,6 +78,13 @@ export type StoredAnalysisResult = {
     hiring_signal?: boolean;
     error?: string | null;
   };
+};
+
+
+export type AnalysisResponse = {
+  analysis_run_id: string | null;
+  total_companies: number;
+  results: StoredAnalysisResult[];
 };
 
 
@@ -191,8 +199,15 @@ export async function runAnalysis(
   crmContexts: Record<
     string,
     CRMContext
-  > = {}
-) {
+  > = {},
+  persist = false,
+  enrichmentMode:
+    | "live"
+    | "sample" = "live",
+  sampleDatasetId:
+    | string
+    | null = null
+): Promise<AnalysisResponse> {
   const cleanCompanies =
     companies.map(
       (company) => ({
@@ -225,6 +240,11 @@ export async function runAnalysis(
           crmContexts,
         use_website_enrichment:
           true,
+        enrichment_mode:
+          enrichmentMode,
+        sample_dataset_id:
+          sampleDatasetId,
+        persist,
       }),
     }
   );

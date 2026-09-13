@@ -56,7 +56,7 @@ export default function DecisionSummary({
 
             {isDemo && (
               <span className="rounded-full bg-violet-400/15 px-3 py-1 text-xs font-semibold text-violet-200 ring-1 ring-violet-300/20">
-                Demo Snapshot
+                Sample Signal Snapshot
               </span>
             )}
           </div>
@@ -73,9 +73,10 @@ export default function DecisionSummary({
 
           {isDemo && (
             <p className="mt-3 text-xs leading-5 text-slate-400">
-              Demo mode uses curated enrichment snapshots
-              for a stable portfolio demonstration. CSV
-              uploads use live website enrichment.
+              Built-in sample datasets use deterministic
+              synthetic signal snapshots for a stable portfolio
+              demonstration. Visitor-uploaded CSVs use live
+              website enrichment.
             </p>
           )}
         </div>
