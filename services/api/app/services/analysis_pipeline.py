@@ -1,13 +1,22 @@
 import asyncio
 
 from services.api.app.integrations.crm.base import CRMProvider
-from services.api.app.integrations.enrichment.base import EnrichmentProvider
+from services.api.app.integrations.enrichment.base import (
+    EnrichmentProvider,
+)
 from services.api.app.schemas.analysis import CompanyAnalysisResult
-from services.api.app.schemas.company import CompanyInput, CompanyNormalized
+from services.api.app.schemas.company import (
+    CompanyInput,
+    CompanyNormalized,
+)
 from services.api.app.schemas.enrichment import WebsiteEnrichment
 from services.api.app.schemas.scoring import ICPProfile
-from services.api.app.services.company_normalizer import normalize_company
-from services.api.app.services.icp_scorer import score_and_rank_companies
+from services.api.app.services.company_normalizer import (
+    normalize_company,
+)
+from services.api.app.services.icp_scorer import (
+    score_and_rank_companies,
+)
 
 
 def company_key(company: CompanyNormalized) -> str:
@@ -49,15 +58,27 @@ class AnalysisPipeline:
             normalized_companies
         )
 
+        enrichment_contexts = {
+            company.domain.lower(): enrichment_by_company[
+                company_key(company)
+            ]
+            for company in normalized_companies
+            if company.domain
+        }
+
         scored_companies = score_and_rank_companies(
             companies=normalized_companies,
             icp=icp,
             crm_contexts=crm_contexts,
+            enrichment_contexts=enrichment_contexts,
         )
 
         results = []
 
-        for rank, scored in enumerate(scored_companies, start=1):
+        for rank, scored in enumerate(
+            scored_companies,
+            start=1,
+        ):
             key = company_key(scored.company)
 
             enrichment = enrichment_by_company.get(

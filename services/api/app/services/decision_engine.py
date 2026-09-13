@@ -3,18 +3,30 @@ from services.api.app.core.decision_policy import (
     HIGH_FIT_THRESHOLD,
     MEDIUM_FIT_THRESHOLD,
 )
+from services.api.app.core.priority_policy import (
+    HIGH_PRIORITY_THRESHOLD,
+    MEDIUM_PRIORITY_THRESHOLD,
+)
 from services.api.app.schemas.crm import CRMContext, CRMStatus
-from services.api.app.schemas.decision import DecisionResult, RecommendedAction
+from services.api.app.schemas.decision import (
+    DecisionResult,
+    RecommendedAction,
+)
+from services.api.app.services.priority_engine import (
+    calculate_priority_score,
+)
 
 
 def make_decision(
     icp_score: int,
     data_confidence: int,
     crm_context: CRMContext | None = None,
+    signal_score: int | None = None,
+    enrichment_available: bool | None = None,
 ) -> DecisionResult:
     crm_context = crm_context or CRMContext()
 
-    # CRM context takes priority over normal prospecting logic.
+    # CRM context always has the highest priority.
     if crm_context.status == CRMStatus.OPEN_OPPORTUNITY:
         return DecisionResult(
             recommended_action=RecommendedAction.CONTINUE_OPPORTUNITY,
@@ -62,26 +74,79 @@ def make_decision(
                 ),
             )
 
-    # Normal new-prospect logic.
-    if icp_score >= HIGH_FIT_THRESHOLD:
-        if data_confidence >= HIGH_CONFIDENCE_THRESHOLD:
+    # Backward-compatible behavior when enrichment was not used.
+    if signal_score is None:
+        if icp_score >= HIGH_FIT_THRESHOLD:
+            if data_confidence >= HIGH_CONFIDENCE_THRESHOLD:
+                return DecisionResult(
+                    recommended_action=RecommendedAction.WORK_NOW,
+                    action_reason="Strong ICP fit with high-confidence data.",
+                )
+
             return DecisionResult(
-                recommended_action=RecommendedAction.WORK_NOW,
-                action_reason="Strong ICP fit with high-confidence data.",
+                recommended_action=RecommendedAction.RESEARCH_FIRST,
+                action_reason=(
+                    "Strong ICP fit, but more reliable data is needed."
+                ),
+            )
+
+        if icp_score >= MEDIUM_FIT_THRESHOLD:
+            return DecisionResult(
+                recommended_action=RecommendedAction.NURTURE,
+                action_reason=(
+                    "Moderate ICP fit; keep the account in consideration."
+                ),
             )
 
         return DecisionResult(
-            recommended_action=RecommendedAction.RESEARCH_FIRST,
-            action_reason="Strong ICP fit, but more reliable data is needed.",
+            recommended_action=RecommendedAction.DEPRIORITIZE,
+            action_reason=(
+                "Low ICP fit compared with the current target profile."
+            ),
         )
 
-    if icp_score >= MEDIUM_FIT_THRESHOLD:
+    # If the account looks strong but live enrichment failed,
+    # request more research rather than silently downgrading it.
+    if (
+        icp_score >= HIGH_FIT_THRESHOLD
+        and enrichment_available is False
+    ):
+        return DecisionResult(
+            recommended_action=RecommendedAction.RESEARCH_FIRST,
+            action_reason=(
+                "Strong ICP fit, but live enrichment could not verify "
+                "current buying or timing signals."
+            ),
+        )
+
+    priority_score, _ = calculate_priority_score(
+        icp_score=icp_score,
+        signal_score=signal_score,
+    )
+
+    if (
+        priority_score >= HIGH_PRIORITY_THRESHOLD
+        and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+    ):
+        return DecisionResult(
+            recommended_action=RecommendedAction.WORK_NOW,
+            action_reason=(
+                "Strong account fit combined with meaningful current signals."
+            ),
+        )
+
+    if priority_score >= MEDIUM_PRIORITY_THRESHOLD:
         return DecisionResult(
             recommended_action=RecommendedAction.NURTURE,
-            action_reason="Moderate ICP fit; keep the account in consideration.",
+            action_reason=(
+                "The account has potential, but its current priority is "
+                "not high enough for immediate outreach."
+            ),
         )
 
     return DecisionResult(
         recommended_action=RecommendedAction.DEPRIORITIZE,
-        action_reason="Low ICP fit compared with the current target profile.",
+        action_reason=(
+            "Account fit and current signals indicate low outbound priority."
+        ),
     )

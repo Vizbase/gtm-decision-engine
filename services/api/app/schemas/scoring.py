@@ -19,6 +19,12 @@ class CompanyScore(BaseModel):
     icp_score: int = Field(ge=0, le=100)
     fit_level: str
 
+    signal_score: int = Field(ge=0, le=100)
+    signal_level: str
+
+    priority_score: int = Field(ge=0, le=100)
+    priority_level: str
+
     data_confidence: int = Field(ge=0, le=100)
     confidence_level: str
 
@@ -29,6 +35,7 @@ class CompanyScore(BaseModel):
     action_reason: str
 
     reasons: list[str]
+    signal_reasons: list[str]
     confidence_reasons: list[str]
 
 
@@ -41,9 +48,6 @@ class ScoreCompanyRequest(BaseModel):
 class BatchScoreRequest(BaseModel):
     companies: list[CompanyNormalized]
     icp: ICPProfile
-
-    # Optional manual CRM overrides.
-    # Key = company domain, e.g. "acme.com"
     crm_contexts: dict[str, CRMContext] = Field(default_factory=dict)
 
 
