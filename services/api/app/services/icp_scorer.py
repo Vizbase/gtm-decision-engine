@@ -48,3 +48,17 @@ def score_company(company: CompanyNormalized, icp: ICPProfile) -> CompanyScore:
         fit_level=fit_level,
         reasons=reasons,
     )
+
+
+def score_and_rank_companies(
+    companies: list[CompanyNormalized],
+    icp: ICPProfile,
+):
+    scored = [score_company(company, icp) for company in companies]
+
+    scored.sort(
+        key=lambda item: item.icp_score,
+        reverse=True,
+    )
+
+    return scored

@@ -21,3 +21,17 @@ class CompanyScore(BaseModel):
 class ScoreCompanyRequest(BaseModel):
     company: CompanyNormalized
     icp: ICPProfile
+
+
+class BatchScoreRequest(BaseModel):
+    companies: list[CompanyNormalized]
+    icp: ICPProfile
+
+
+class RankedCompanyScore(CompanyScore):
+    rank: int
+
+
+class BatchScoreResponse(BaseModel):
+    total_companies: int
+    results: list[RankedCompanyScore]

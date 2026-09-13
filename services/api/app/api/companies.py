@@ -1,10 +1,19 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from services.api.app.schemas.company import CompanyInput, CompanyNormalized
-from services.api.app.schemas.scoring import CompanyScore, ScoreCompanyRequest
+from services.api.app.schemas.scoring import (
+    BatchScoreRequest,
+    BatchScoreResponse,
+    CompanyScore,
+    RankedCompanyScore,
+    ScoreCompanyRequest,
+)
 from services.api.app.services.company_normalizer import normalize_company
 from services.api.app.services.csv_importer import import_companies_from_csv
-from services.api.app.services.icp_scorer import score_company
+from services.api.app.services.icp_scorer import (
+    score_and_rank_companies,
+    score_company,
+)
 
 router = APIRouter(
     prefix="/companies",
@@ -38,3 +47,24 @@ async def import_companies(file: UploadFile = File(...)):
 @router.post("/score", response_model=CompanyScore)
 def score_company_endpoint(request: ScoreCompanyRequest):
     return score_company(request.company, request.icp)
+
+
+@router.post("/rank", response_model=BatchScoreResponse)
+def rank_companies(request: BatchScoreRequest):
+    scored = score_and_rank_companies(
+        request.companies,
+        request.icp,
+    )
+
+    ranked = [
+        RankedCompanyScore(
+            rank=index,
+            **item.model_dump(),
+        )
+        for index, item in enumerate(scored, start=1)
+    ]
+
+    return BatchScoreResponse(
+        total_companies=len(ranked),
+        results=ranked,
+    )
