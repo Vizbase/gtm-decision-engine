@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import CompanyDetailPanel from "@/components/CompanyDetailPanel";
 import CsvUploadPanel from "@/components/CsvUploadPanel";
 
 import {
   AnalysisRunDetail,
+  StoredAnalysisResult,
   getAnalysisRun,
   getAnalysisRuns,
   runDemoAnalysis,
@@ -27,7 +29,11 @@ export default function Home() {
   const [analysis, setAnalysis] =
     useState<AnalysisRunDetail | null>(null);
 
+  const [selectedResult, setSelectedResult] =
+    useState<StoredAnalysisResult | null>(null);
+
   const [loading, setLoading] = useState(true);
+
   const [runningDemo, setRunningDemo] =
     useState(false);
 
@@ -76,6 +82,7 @@ export default function Home() {
   async function handleDemo() {
     setRunningDemo(true);
     setError(null);
+    setSelectedResult(null);
 
     try {
       const result = await runDemoAnalysis();
@@ -102,7 +109,8 @@ export default function Home() {
   ).length;
 
   const workNow = results.filter(
-    (item) => item.recommended_action === "work_now"
+    (item) =>
+      item.recommended_action === "work_now"
   ).length;
 
 
@@ -119,6 +127,7 @@ export default function Home() {
               Turn account data into clear sales priorities.
             </p>
           </div>
+
 
           <div className="flex gap-3">
             <button
@@ -149,11 +158,13 @@ export default function Home() {
           </div>
         )}
 
+
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
             {error}
           </div>
         )}
+
 
         {!loading && !analysis && (
           <div className="rounded-xl border border-slate-200 bg-white p-8">
@@ -167,6 +178,7 @@ export default function Home() {
           </div>
         )}
 
+
         {analysis && (
           <>
             <div className="mb-7">
@@ -177,6 +189,10 @@ export default function Home() {
               <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
                 Account Priority Overview
               </h2>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Click an account to see why it received its recommendation.
+              </p>
             </div>
 
 
@@ -244,11 +260,15 @@ export default function Home() {
                     </tr>
                   </thead>
 
+
                   <tbody className="divide-y divide-slate-100">
                     {results.map((result) => (
                       <tr
                         key={`${result.rank}-${result.company.name}`}
-                        className="hover:bg-slate-50"
+                        onClick={() =>
+                          setSelectedResult(result)
+                        }
+                        className="cursor-pointer transition hover:bg-slate-50"
                       >
                         <td className="px-6 py-5 font-medium text-slate-500">
                           #{result.rank}
@@ -260,13 +280,16 @@ export default function Home() {
                           </div>
 
                           <div className="mt-1 text-xs text-slate-500">
-                            {result.company.domain ?? "No domain"}
+                            {result.company.domain ??
+                              "No domain"}
                           </div>
                         </td>
 
                         <td className="px-6 py-5">
                           <ScoreBadge
-                            score={result.priority_score}
+                            score={
+                              result.priority_score
+                            }
                           />
                         </td>
 
@@ -307,8 +330,19 @@ export default function Home() {
           onClose={() => setShowUpload(false)}
           onAnalysisComplete={(newAnalysis) => {
             setAnalysis(newAnalysis);
+            setSelectedResult(null);
             setError(null);
           }}
+        />
+      )}
+
+
+      {selectedResult && (
+        <CompanyDetailPanel
+          result={selectedResult}
+          onClose={() =>
+            setSelectedResult(null)
+          }
         />
       )}
     </main>

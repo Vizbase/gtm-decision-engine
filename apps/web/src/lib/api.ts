@@ -13,14 +13,6 @@ export type Company = {
 };
 
 
-export type AnalysisRunSummary = {
-  id: string;
-  workspace_name: string;
-  total_companies: number;
-  created_at: string;
-};
-
-
 export type StoredAnalysisResult = {
   company: Company;
 
@@ -40,6 +32,20 @@ export type StoredAnalysisResult = {
 
   recommended_action: string;
   action_reason: string;
+
+  reasons: string[];
+  signal_reasons: string[];
+  confidence_reasons: string[];
+
+  enrichment: {
+    reachable?: boolean;
+    title?: string | null;
+    description?: string | null;
+    detected_technologies?: string[];
+    signal_keywords?: string[];
+    hiring_signal?: boolean;
+    error?: string | null;
+  };
 };
 
 
@@ -89,12 +95,7 @@ export async function getAnalysisRun(
 }
 
 
-export async function uploadCompaniesCsv(
-  file: File
-): Promise<{
-  imported_count: number;
-  companies: Company[];
-}> {
+export async function uploadCompaniesCsv(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -119,15 +120,6 @@ export async function runAnalysis(
   icp: ICPInput,
   workspaceName = "CSV Workspace"
 ) {
-  const cleanCompanies = companies.map((company) => ({
-    name: company.name,
-    website: company.website,
-    country: company.country,
-    industry: company.industry,
-    employee_count: company.employee_count,
-    linkedin_url: company.linkedin_url,
-  }));
-
   const response = await fetch(
     `${API_URL}/analysis/run`,
     {
@@ -137,7 +129,7 @@ export async function runAnalysis(
       },
       body: JSON.stringify({
         workspace_name: workspaceName,
-        companies: cleanCompanies,
+        companies,
         icp,
         use_website_enrichment: true,
       }),
@@ -195,17 +187,6 @@ export async function runDemoAnalysis() {
     },
     "Demo Workspace"
   );
-}
-
-
-export async function checkBackendHealth() {
-  const response = await fetch(`${API_URL}/health`);
-
-  if (!response.ok) {
-    throw new Error("Backend is not available");
-  }
-
-  return response.json();
 }
 
 
