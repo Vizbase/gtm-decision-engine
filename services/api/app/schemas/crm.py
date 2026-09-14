@@ -17,4 +17,4 @@ class CRMContext(BaseModel):
     owner: Optional[str] = None
     opportunity_stage: Optional[str] = None
     days_since_last_contact: Optional[int] = None
-    source: str = "demo"
+    source: str = "not_provided"

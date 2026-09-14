@@ -174,7 +174,11 @@ export default function CompanyDetailPanel({
 
             <InfoRow
               label="Source"
-              value={result.crm_source}
+              value={
+                result.crm_source === "not_provided"
+                  ? "No CRM context"
+                  : formatValue(result.crm_source)
+              }
             />
           </Section>
 
