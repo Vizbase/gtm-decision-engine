@@ -406,14 +406,16 @@ export default function Home() {
 
 
           <div className="flex gap-3">
-            <button
-              onClick={() =>
-                setShowHistory(true)
-              }
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              History
-            </button>
+            {history.length > 0 && (
+              <button
+                onClick={() =>
+                  setShowHistory(true)
+                }
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                History
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -834,7 +836,7 @@ export default function Home() {
       )}
 
 
-      {showHistory && (
+      {showHistory && history.length > 0 && (
         <AnalysisHistoryPanel
           runs={history}
           activeRunId={
