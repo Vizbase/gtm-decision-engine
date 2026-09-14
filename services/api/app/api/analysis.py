@@ -8,6 +8,9 @@ from services.api.app.core.database import get_db
 from services.api.app.integrations.crm.demo_provider import (
     DemoCRMProvider,
 )
+from services.api.app.integrations.crm.no_crm_provider import (
+    NoCRMProvider,
+)
 from services.api.app.integrations.enrichment.demo_snapshot_provider import (
     DemoSnapshotEnrichmentProvider,
 )
@@ -62,7 +65,7 @@ ALLOWED_SAMPLE_DATASETS = {
 
 
 live_analysis_pipeline = AnalysisPipeline(
-    crm_provider=DemoCRMProvider(),
+    crm_provider=NoCRMProvider(),
     enrichment_provider=WebsiteEnrichmentProvider(),
 )
 
