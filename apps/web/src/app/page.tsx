@@ -745,9 +745,13 @@ export default function Home() {
                           </td>
 
                           <td className="px-6 py-5 text-slate-700">
-                            {
+                            {result.signal_level === "unknown" ? (
+                              <span className="text-xs font-medium text-slate-400">
+                                Unavailable
+                              </span>
+                            ) : (
                               result.signal_score
-                            }
+                            )}
                           </td>
 
                           <td className="px-6 py-5">

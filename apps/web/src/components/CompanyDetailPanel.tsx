@@ -96,7 +96,11 @@ export default function CompanyDetailPanel({
 
               <Score
                 label="Signals"
-                value={result.signal_score}
+                value={
+                  result.signal_level === "unknown"
+                    ? "Unavailable"
+                    : result.signal_score
+                }
               />
 
               <Score

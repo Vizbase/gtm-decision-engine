@@ -191,6 +191,7 @@ def make_decision(
     if (
         priority_score >= HIGH_PRIORITY_THRESHOLD
         and data_confidence >= HIGH_CONFIDENCE_THRESHOLD
+        and signal_score >= 40
     ):
         return DecisionResult(
             recommended_action=RecommendedAction.WORK_NOW,
