@@ -650,10 +650,14 @@ export default function CsvUploadPanel({
               />
 
               <p className="font-medium text-slate-800">
-                {loadingFile
-                  ? "Reading CSV..."
-                  : fileName ||
-                    "Choose CSV file"}
+                {loadingFile ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" />
+                    Reading CSV...
+                  </span>
+                ) : (
+                  fileName || "Choose CSV file"
+                )}
               </p>
 
               <p className="mt-2 text-sm text-slate-500">
@@ -1094,11 +1098,14 @@ export default function CsvUploadPanel({
               className="rounded-lg bg-slate-950 px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
 
-              {running
-                ? "Analyzing..."
-                : `Analyze ${
-                    companies.length || ""
-                  } Accounts`}
+              {running ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Analyzing accounts…
+                </span>
+              ) : (
+                `Analyze ${companies.length || ""} Accounts`
+              )}
 
             </button>
 
